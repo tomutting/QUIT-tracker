@@ -576,7 +576,7 @@
     /* smoked days start at green-leaning yellow-green (hue 100), never pure green — sober stays visually unique;
        saturation rises toward the red end for a deeper max red */
     const t = Math.min(score / maxScoreFor(), 1);
-    return 'hsl(' + (100 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
+    return 'hsl(' + (97 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
