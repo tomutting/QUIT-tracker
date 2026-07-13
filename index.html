@@ -164,6 +164,7 @@
   }
   .carousel {
     display: flex; overflow-x: auto; gap: 14px;
+    padding: 4px; /* room for today/sober rings at the edges */
     scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .carousel::-webkit-scrollbar { display: none; }
@@ -716,7 +717,8 @@
     $('carousel').hidden = false;
     $('carouselHint').hidden = false;
     const idx = MONTHS_BACK + (mOff || 0);
-    carouselEl.scrollLeft = idx * (carouselEl.clientWidth + 14);
+    const kids = carouselEl.children;
+    carouselEl.scrollLeft = kids[idx].offsetLeft - kids[0].offsetLeft;
   }
 
   /* ═══════════════ STREAKS & STATS ═══════════════ */
