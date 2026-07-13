@@ -324,6 +324,23 @@
   .celebrate-toast .big { font-size: 40px; filter: drop-shadow(0 0 14px var(--glow-green)); }
   .celebrate-toast .msg { font-size: 15px; font-weight: 700; margin-top: 6px; color: #7ee787; text-shadow: 0 0 14px var(--glow-green); }
   .celebrate-toast .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ============ WELCOME POPUP ============ */
+  .welcome-pop {
+    position: fixed; inset: 0; z-index: 55;
+    background: rgba(4,7,12,0.65);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .welcome-card {
+    background: linear-gradient(160deg, rgba(26,32,41,0.97) 0%, rgba(18,23,31,0.97) 100%);
+    border: 1px solid rgba(63,185,80,0.4); border-radius: 20px;
+    padding: 26px 24px; text-align: center; max-width: 320px; width: 100%;
+    box-shadow: 0 0 40px var(--glow-green), 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .welcome-card .big { font-size: 44px; filter: drop-shadow(0 0 16px var(--glow-green)); }
+  .welcome-card .msg { font-size: 18px; font-weight: 800; margin-top: 10px; }
+  .welcome-card .sub { font-size: 13.5px; color: var(--muted); margin: 8px 0 18px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -349,7 +366,7 @@
     <div class="auth-actions">
       <button class="btn btn-save" id="btnSignup">Create account</button>
       <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
-      <button class="btn-link" id="btnSkip">Skip for now — keep data on this device</button>
+      <button class="btn-link" id="btnSkip" hidden>Cancel</button>
     </div>
   </div>
 </div>
@@ -401,6 +418,16 @@
   </div>
 
   <p class="hint" id="storageHint">Data is saved on this device in your browser.</p>
+</div>
+
+<!-- first-run welcome -->
+<div class="welcome-pop" id="welcomePop" hidden>
+  <div class="welcome-card">
+    <div class="big">👋</div>
+    <div class="msg">Welcome to Clear Days</div>
+    <div class="sub">Tap any day on the calendar to log it.<br>Clear days turn green — watch them add up.</div>
+    <button class="btn btn-save" id="btnWelcomeOk">OK</button>
+  </div>
 </div>
 
 <div class="overlay" id="overlay"></div>
@@ -895,10 +922,10 @@
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
     $('obStep2').hidden = step !== 2;
-    $('authMsg').textContent = configured() ? '' : '';
-    $('btnSkip').textContent = fromAcct ? 'Cancel' : 'Skip for now — keep data on this device';
+    $('authMsg').textContent = '';
+    $('btnSkip').hidden = !fromAcct;
     if (step === 2 && !configured()) {
-      msg('Server not set up yet — see the setup note inside this file. You can still skip and track locally.');
+      msg('Server not set up yet — see the setup note inside this file.');
     }
   }
   function hideOnboard() { $('onboard').hidden = true; }
@@ -911,12 +938,7 @@
     });
   });
 
-  $('btnSkip').addEventListener('click', () => {
-    if (fromAccountSheet) { hideOnboard(); return; }
-    profile = { substance: pendingSub, local: true };
-    saveProfile();
-    hideOnboard(); startApp();
-  });
+  $('btnSkip').addEventListener('click', () => { hideOnboard(); });
 
   async function doAuth(mode) {
     if (!configured()) { msg('Server not set up yet — see the setup note inside this file.'); return; }
@@ -967,6 +989,11 @@
     setPill();
     const sc = $('calScroll');
     sc.scrollLeft = sc.scrollWidth;
+    /* first-run welcome */
+    if (!localStorage.getItem('qt_welcomed')) {
+      if (Object.keys(data).length) localStorage.setItem('qt_welcomed', '1');
+      else $('welcomePop').hidden = false;
+    }
     /* resume server session */
     if (!profile.local && configured()) {
       initFirebase().then(() => {
@@ -982,6 +1009,11 @@
       }).catch(() => setPill('error'));
     }
   }
+
+  $('btnWelcomeOk').addEventListener('click', () => {
+    localStorage.setItem('qt_welcomed', '1');
+    $('welcomePop').hidden = true;
+  });
 
   /* ---- boot ---- */
   if (profile && profile.substance) startApp();
