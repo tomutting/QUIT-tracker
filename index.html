@@ -607,14 +607,14 @@
 
       const dow = document.createElement('div');
       dow.className = 'dow';
-      ['S','M','T','W','T','F','S'].forEach(l => {
+      ['M','T','W','T','F','S','S'].forEach(l => {
         const s = document.createElement('span'); s.textContent = l; dow.appendChild(s);
       });
       card.appendChild(dow);
 
       const grid = document.createElement('div');
       grid.className = 'mgrid';
-      for (let b = 0; b < mFirst.getDay(); b++) {
+      for (let b = 0; b < (mFirst.getDay() + 6) % 7; b++) {
         const blank = document.createElement('div');
         blank.className = 'cell blank';
         grid.appendChild(blank);
@@ -680,7 +680,7 @@
       card.appendChild(t);
       const grid = document.createElement('div');
       grid.className = 'mini-mgrid';
-      for (let b = 0; b < mFirst.getDay(); b++) {
+      for (let b = 0; b < (mFirst.getDay() + 6) % 7; b++) {
         const blank = document.createElement('div');
         blank.className = 'mini-cell blank';
         grid.appendChild(blank);
