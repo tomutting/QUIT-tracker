@@ -268,6 +268,8 @@
   .sheet .date-sub { font-size: 12px; color: var(--accent); margin-bottom: 14px; }
   .sheet label.q { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 8px; }
   .count-row { display: flex; gap: 7px; }
+  .count-row.wrap { flex-wrap: wrap; }
+  .count-row.wrap .count-btn { flex: 1 0 calc(16.66% - 7px); }
   .count-btn {
     flex: 1; min-width: 0; padding: 13px 0; border-radius: 12px; border: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
@@ -319,6 +321,15 @@
   /* account sheet bits */
   .acct-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
   .acct-row .k { color: var(--muted); font-size: 12.5px; }
+  .max-edit { display: flex; align-items: center; gap: 12px; }
+  .max-btn {
+    width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.01) 100%);
+    color: var(--text); font-size: 17px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07);
+  }
+  .max-btn:active { transform: translateY(1px); }
+  .max-num { font-weight: 800; font-size: 16px; min-width: 26px; text-align: center; }
   .sub-switch { display: flex; gap: 8px; margin-top: 10px; }
   .sub-switch button {
     flex: 1; padding: 12px 4px; border-radius: 12px; border: 1px solid var(--border);
@@ -388,6 +399,16 @@
       <button class="sub-card" data-sub="cigs"><span class="emoji">🚬</span><span><span class="t">Cigarettes</span><br><span class="d">Log cigarettes per day</span></span></button>
       <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log drinks / units per day</span></span></button>
     </div>
+  </div>
+  <div class="ob-step" id="obStepMax" hidden>
+    <h2 id="maxQ"></h2>
+    <p class="tagline" style="margin: -6px 0 22px">This sets your personal scale — that amount shows as deepest red.</p>
+    <div class="stepper">
+      <button class="step-btn" id="obMaxMinus">−</button>
+      <div class="step-num" id="obMaxNum">6</div>
+      <button class="step-btn" id="obMaxPlus">+</button>
+    </div>
+    <button class="btn btn-save" id="btnMaxContinue" style="margin-top: 24px">Continue</button>
   </div>
   <div class="ob-step auth-box" id="obStep2" hidden>
     <h2>Back up your progress</h2>
@@ -481,6 +502,7 @@
   <div class="date-sub" id="acctStatus"></div>
   <div class="acct-row"><span class="k">Tracking</span><span id="acctSub"></span></div>
   <div class="sub-switch" id="subSwitch"></div>
+  <div class="acct-row"><span class="k">Heavy-day max <span style="opacity:0.6">(deepest red)</span></span><div class="max-edit" id="maxEdit"></div></div>
   <div class="sheet-actions" id="acctActions"></div>
 </div>
 
@@ -497,10 +519,18 @@
   /* ═══════════════════════════════════════════════════════════════════════════ */
 
   const SUBSTANCES = {
-    weed:    { emoji: '🌿', name: 'Weed',       unit: 'smoke',     unitPlural: 'smokes',     maxCount: 6,  hasIntensity: true,  maxScore: 30 },
-    cigs:    { emoji: '🚬', name: 'Cigarettes', unit: 'cigarette', unitPlural: 'cigarettes', maxCount: 60, hasIntensity: false, maxScore: 20 },
-    alcohol: { emoji: '🍺', name: 'Alcohol',    unit: 'drink',     unitPlural: 'drinks',     maxCount: 40, hasIntensity: false, maxScore: 15 }
+    weed:    { emoji: '🌿', name: 'Weed',       unit: 'smoke',     unitPlural: 'smokes',     maxCount: 6,  hasIntensity: true,
+               maxQ: 'On a heavy day, how many times would you smoke?' },
+    cigs:    { emoji: '🚬', name: 'Cigarettes', unit: 'cigarette', unitPlural: 'cigarettes', maxCount: 20, hasIntensity: false,
+               maxQ: 'On a heavy day, how many cigarettes would you smoke?' },
+    alcohol: { emoji: '🍺', name: 'Alcohol',    unit: 'drink',     unitPlural: 'drinks',     maxCount: 10, hasIntensity: false,
+               maxQ: 'On a heavy day, how many drinks would you have?' }
   };
+  const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 60 }, alcohol: { min: 1, max: 30 } };
+
+  /* personal max for the active substance (set during onboarding) */
+  const maxCountFor = () => (profile && profile.maxCounts && profile.maxCounts[profile.substance]) || SUB.maxCount;
+  const maxScoreFor = () => SUB.hasIntensity ? maxCountFor() * 5 : maxCountFor();
 
   const $ = id => document.getElementById(id);
   const configured = () => FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE') === -1;
@@ -542,9 +572,10 @@
     if (!entry) return null;
     const score = entryScore(entry);
     if (score === 0) return '#39d353';
-    /* smoked days start at green-leaning yellow-green (hue 88), never pure green — sober stays visually unique */
-    const t = Math.min(score / SUB.maxScore, 1);
-    return 'hsl(' + (88 * (1 - t)) + ',72%,' + (50 - 4 * t) + '%)';
+    /* smoked days start at green-leaning yellow-green (hue 94), never pure green — sober stays visually unique;
+       saturation rises toward the red end for a deeper max red */
+    const t = Math.min(score / maxScoreFor(), 1);
+    return 'hsl(' + (94 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
@@ -772,9 +803,9 @@
     body.appendChild(q);
 
     if (SUB.hasIntensity) {
-      /* 0–5 buttons */
-      const row = document.createElement('div'); row.className = 'count-row';
-      for (let n = 0; n <= SUB.maxCount; n++) {
+      /* count buttons 0..personal max */
+      const row = document.createElement('div'); row.className = 'count-row' + (maxCountFor() > 7 ? ' wrap' : '');
+      for (let n = 0; n <= maxCountFor(); n++) {
         const b = document.createElement('button');
         b.className = 'count-btn' + (n === selCount ? ' sel' : '');
         b.textContent = n;
@@ -795,7 +826,7 @@
       const num = document.createElement('div'); num.className = 'step-num'; num.textContent = selCount;
       const plus = document.createElement('button'); plus.className = 'step-btn'; plus.textContent = '+';
       minus.addEventListener('click', () => { if (selCount > 0) { selCount--; num.textContent = selCount; cap.update(); } });
-      plus.addEventListener('click', () => { if (selCount < SUB.maxCount) { selCount++; num.textContent = selCount; cap.update(); } });
+      plus.addEventListener('click', () => { if (selCount < maxCountFor()) { selCount++; num.textContent = selCount; cap.update(); } });
       st.appendChild(minus); st.appendChild(num); st.appendChild(plus);
       body.appendChild(st);
       const cap = document.createElement('div'); cap.className = 'step-caption';
@@ -963,6 +994,7 @@
     db.collection('users').doc(user.uid).set({
       substance: profile.substance,
       email: profile.email || '',
+      maxCounts: profile.maxCounts || {},
       logs: allLogs(),
       updatedAt: new Date().toISOString()
     }).then(() => setPill('synced')).catch(() => setPill('error'));
@@ -979,6 +1011,11 @@
     }
     if (adoptRemoteSubstance && remote.substance && SUBSTANCES[remote.substance]) {
       profile.substance = remote.substance;
+    }
+    if (remote.maxCounts) {
+      profile.maxCounts = adoptRemoteSubstance
+        ? Object.assign({}, profile.maxCounts || {}, remote.maxCounts)   /* returning user: server wins */
+        : Object.assign({}, remote.maxCounts, profile.maxCounts || {});  /* otherwise local wins */
     }
   }
 
@@ -1013,6 +1050,23 @@
       });
       sw.appendChild(b);
     }
+    /* heavy-day max editor */
+    const me = $('maxEdit');
+    me.innerHTML = '';
+    const lim = MAX_LIMITS[profile.substance];
+    const mMinus = document.createElement('button'); mMinus.className = 'max-btn'; mMinus.textContent = '−';
+    const mNum = document.createElement('span'); mNum.className = 'max-num'; mNum.textContent = maxCountFor();
+    const mPlus = document.createElement('button'); mPlus.className = 'max-btn'; mPlus.textContent = '+';
+    const setMax = v => {
+      if (!profile.maxCounts) profile.maxCounts = {};
+      profile.maxCounts[profile.substance] = v;
+      mNum.textContent = v;
+      saveProfile(); paintGrid(); computeStats(); schedulePush();
+    };
+    mMinus.addEventListener('click', () => { const v = maxCountFor(); if (v > lim.min) setMax(v - 1); });
+    mPlus.addEventListener('click', () => { const v = maxCountFor(); if (v < lim.max) setMax(v + 1); });
+    me.appendChild(mMinus); me.appendChild(mNum); me.appendChild(mPlus);
+
     const acts = $('acctActions');
     acts.innerHTML = '';
     if (profile.local) {
@@ -1044,6 +1098,7 @@
     fromAccountSheet = !!fromAcct;
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
+    $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('authMsg').textContent = '';
     $('btnSkip').hidden = false;
@@ -1055,16 +1110,30 @@
   function hideOnboard() { $('onboard').hidden = true; }
   function msg(t, ok) { const m = $('authMsg'); m.textContent = t; m.className = 'auth-msg' + (ok ? ' ok' : ''); }
 
+  let pendingMax = 6;
+
   document.querySelectorAll('.sub-card').forEach(card => {
     card.addEventListener('click', () => {
       pendingSub = card.dataset.sub;
-      showOnboard(2, false);
+      pendingMax = (profile && profile.maxCounts && profile.maxCounts[pendingSub]) || SUBSTANCES[pendingSub].maxCount;
+      $('maxQ').textContent = SUBSTANCES[pendingSub].maxQ;
+      $('obMaxNum').textContent = pendingMax;
+      showOnboard('max', false);
     });
   });
 
+  $('obMaxMinus').addEventListener('click', () => {
+    if (pendingMax > MAX_LIMITS[pendingSub].min) $('obMaxNum').textContent = --pendingMax;
+  });
+  $('obMaxPlus').addEventListener('click', () => {
+    if (pendingMax < MAX_LIMITS[pendingSub].max) $('obMaxNum').textContent = ++pendingMax;
+  });
+  $('btnMaxContinue').addEventListener('click', () => showOnboard(2, false));
+
   $('btnSkip').addEventListener('click', () => {
     if (fromAccountSheet) { hideOnboard(); return; }
-    profile = { substance: pendingSub, local: true };
+    profile = { substance: pendingSub, local: true, maxCounts: {} };
+    profile.maxCounts[pendingSub] = pendingMax;
     saveProfile();
     hideOnboard(); startApp();
   });
@@ -1085,7 +1154,9 @@
         : await auth.signInWithEmailAndPassword(email, pass);
       user = cred.user;
       const sub = fromAccountSheet ? profile.substance : pendingSub;
-      profile = { substance: sub, email: email, uid: user.uid, local: false };
+      const mc = (fromAccountSheet && profile.maxCounts) ? profile.maxCounts : {};
+      if (!fromAccountSheet) mc[pendingSub] = pendingMax;
+      profile = { substance: sub, email: email, uid: user.uid, local: false, maxCounts: mc };
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
       pushAll();
