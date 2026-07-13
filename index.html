@@ -542,9 +542,9 @@
     if (!entry) return null;
     const score = entryScore(entry);
     if (score === 0) return '#39d353';
-    /* smoked days start at yellow-green (hue 78), never pure green — sober stays visually unique */
+    /* smoked days start at green-leaning yellow-green (hue 88), never pure green — sober stays visually unique */
     const t = Math.min(score / SUB.maxScore, 1);
-    return 'hsl(' + (78 * (1 - t)) + ',72%,' + (50 - 4 * t) + '%)';
+    return 'hsl(' + (88 * (1 - t)) + ',72%,' + (50 - 4 * t) + '%)';
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
