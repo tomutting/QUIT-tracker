@@ -450,7 +450,7 @@
     </div>
     <div class="legend">
       <span>Sober</span>
-      <div class="swatch" style="background:#39d353; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75)"></div>
+      <div class="swatch" style="background:#2edb4b; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75)"></div>
       <div class="swatch" style="background:#a3b21a"></div>
       <div class="swatch" style="background:#d29922"></div>
       <div class="swatch" style="background:#e3672b"></div>
@@ -568,14 +568,15 @@
   const fmtLong = d => d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
   /* ---- colour ---- */
+  const SOBER_COLOR = '#2edb4b'; /* vivid green, hue ~130 */
   function dayColor(entry) {
     if (!entry) return null;
     const score = entryScore(entry);
-    if (score === 0) return '#39d353';
-    /* smoked days start at green-leaning yellow-green (hue 94), never pure green — sober stays visually unique;
+    if (score === 0) return SOBER_COLOR;
+    /* smoked days start at green-leaning yellow-green (hue 100), never pure green — sober stays visually unique;
        saturation rises toward the red end for a deeper max red */
     const t = Math.min(score / maxScoreFor(), 1);
-    return 'hsl(' + (94 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
+    return 'hsl(' + (100 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
@@ -640,11 +641,11 @@
   function paintGrid() {
     for (const k in cells) {
       const c = dayColor(data[k]);
-      const sober = c === '#39d353';
+      const sober = c === SOBER_COLOR;
       if (c) {
         cells[k].style.background = 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.28), transparent 55%), ' + c;
         cells[k].style.boxShadow = sober
-          ? 'inset 0 0 0 2px rgba(255,255,255,0.8), 0 0 12px rgba(57,211,83,0.65)'
+          ? 'inset 0 0 0 2px rgba(255,255,255,0.8), 0 0 12px rgba(46,219,75,0.65)'
           : '0 0 9px ' + c.replace('hsl(', 'hsla(').replace('%)', '%,0.45)');
         cells[k].style.color = sober ? '#fff' : 'rgba(0,0,0,0.6)';
         cells[k].style.textShadow = sober ? '0 1px 2px rgba(0,0,0,0.4)' : '';
@@ -658,7 +659,7 @@
     for (const k in miniCells) {
       const c = dayColor(data[k]);
       miniCells[k].style.background = c || '';
-      miniCells[k].style.boxShadow = c === '#39d353' ? 'inset 0 0 0 1px rgba(255,255,255,0.75)' : '';
+      miniCells[k].style.boxShadow = c === SOBER_COLOR ? 'inset 0 0 0 1px rgba(255,255,255,0.75)' : '';
     }
   }
 
@@ -907,7 +908,7 @@
     /* confetti */
     const box = document.createElement('div');
     box.className = 'confetti';
-    const colors = ['#39d353', '#7ee787', '#2ea043', '#e3b341', '#eef2f7', '#58a6ff'];
+    const colors = ['#2edb4b', '#7ee787', '#2ea043', '#e3b341', '#eef2f7', '#58a6ff'];
     for (let i = 0; i < 70; i++) {
       const p = document.createElement('i');
       p.style.left = (Math.random() * 100) + 'vw';
