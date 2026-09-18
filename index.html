@@ -591,11 +591,10 @@
     if (!entry) return null;
     const score = entryScore(entry);
     if (score === 0) return SOBER_COLOR;
-    /* smoked days start at yellow (hue ~78) — a bigger pull off green than a few degrees gives,
-       since small hue shifts barely register at this saturation; never pure green — sober stays visually unique;
-       saturation rises toward the red end for a deeper max red */
+    /* smoked days start at yellow-green (hue ~85) — halfway between the too-subtle 91 and the too-yellow 78;
+       never pure green — sober stays visually unique; saturation rises toward the red end for a deeper max red */
     const t = Math.min(score / maxScoreFor(), 1);
-    return 'hsl(' + (78 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
+    return 'hsl(' + (85 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
