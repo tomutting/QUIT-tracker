@@ -68,7 +68,7 @@
   <div class="card">
     <h2>Users &amp; retention</h2>
     <div class="grid" id="userStats" style="margin-bottom:14px"></div>
-    <table id="cohortTable"><thead><tr><th>Cohort (first log)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">7d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table>
+    <table id="cohortTable"><thead><tr><th>Cohort (signup month)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">7d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Back after Nd+" = logged at least one day N or more days after their first log. Accounts only — local-only users aren't visible.</p>
   </div>
 </div>
@@ -134,9 +134,10 @@ async function load() {
     const days = new Set();
     const logs = u.logs || {};
     for (const sub in logs) for (const k in logs[sub]) days.add(k);
-    if (!days.size) { users.push({ first: null }); return; }
+    const created = u.createdAt ? u.createdAt.slice(0, 10) : null;
+    if (!days.size) { users.push({ first: null, created }); return; }
     const sorted = [...days].sort();
-    users.push({ first: sorted[0], days: sorted });
+    users.push({ first: sorted[0], days: sorted, created });
   });
   const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
   const withLogs = users.filter(u => u.first);
@@ -149,7 +150,7 @@ async function load() {
   /* cohorts by month of first log */
   const cohorts = {};
   withLogs.forEach(u => {
-    const c = u.first.slice(0, 7);
+    const c = (u.created || u.first).slice(0, 7);   /* cohort = signup month; falls back to first log for old accounts */
     cohorts[c] = cohorts[c] || { n: 0, d1: 0, d7: 0, d30: 0 };
     cohorts[c].n++;
     const last = u.days[u.days.length - 1];

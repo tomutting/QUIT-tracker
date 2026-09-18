@@ -992,6 +992,7 @@
       substance: profile.substance,
       email: profile.email || '',
       maxCounts: profile.maxCounts || {},
+      createdAt: profile.createdAt || null,
       logs: allLogs(),
       updatedAt: new Date().toISOString()
     }).then(() => setPill('synced')).catch(() => setPill('error'));
@@ -1009,6 +1010,7 @@
     if (adoptRemoteSubstance && remote.substance && SUBSTANCES[remote.substance]) {
       profile.substance = remote.substance;
     }
+    if (remote.createdAt && !profile.createdAt) profile.createdAt = remote.createdAt;
     if (remote.maxCounts) {
       profile.maxCounts = adoptRemoteSubstance
         ? Object.assign({}, profile.maxCounts || {}, remote.maxCounts)   /* returning user: server wins */
@@ -1162,7 +1164,8 @@
       const sub = fromAccountSheet ? profile.substance : pendingSub;
       const mc = (fromAccountSheet && profile.maxCounts) ? profile.maxCounts : {};
       if (!fromAccountSheet) mc[pendingSub] = pendingMax;
-      profile = { substance: sub, email: email, uid: user.uid, local: false, maxCounts: mc };
+      profile = { substance: sub, email: email, uid: user.uid, local: false, maxCounts: mc,
+                  createdAt: mode === 'signup' ? new Date().toISOString() : null };
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
       pushAll();
