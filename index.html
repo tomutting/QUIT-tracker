@@ -883,6 +883,10 @@
     if (score === 0) {
       let streak = 0, d = new Date(k + 'T00:00:00');
       while (isSoberKey(key(d))) { streak++; d = addDays(d, -1); }
+      if (streak > 0 && streak % 10 === 0) {
+        celebrate('🏆', streak + ' days clear!', 'A huge milestone — keep going.');
+        return;
+      }
       celebrate('🎉', 'A clear day!',
         streak > 1 ? streak + ' clear days in a row. Keep it going.' : 'Every one of these counts.');
       return;
