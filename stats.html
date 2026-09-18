@@ -118,6 +118,7 @@ async function load() {
     stat(counts.visit || 0, 'visits') +
     stat(onboards, 'onboarding starts') +
     stat(counts.signup || 0, 'signups') +
+    stat(counts.first_log || 0, 'first logs') +
     stat(counts.login || 0, 'logins') +
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
   const tb = $('srcTable').querySelector('tbody');

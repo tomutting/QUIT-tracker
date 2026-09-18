@@ -83,6 +83,17 @@
     padding: 24px 18px;
   }
   .ob-step { width: 100%; max-width: 400px; text-align: center; }
+  /* explainer: miniature calendar + what the colours mean */
+  .demo-cal {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+    padding: 12px; margin: 18px 0 20px; border-radius: 14px;
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+  }
+  .demo-cal i { aspect-ratio: 1; border-radius: 6px; background: var(--empty); }
+  .demo-cal i.sober { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75); }
+  .how-list { text-align: left; display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .how-row { display: flex; gap: 11px; align-items: flex-start; font-size: 13.5px; color: #c4ccd4; line-height: 1.5; }
+  .how-row .dot { width: 17px; height: 17px; border-radius: 5px; flex: 0 0 auto; margin-top: 2px; }
   .ob-step h1 {
     font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, #d7ffe0 0%, #3fb950 55%, #1f7a33 100%);
@@ -421,9 +432,27 @@
 
 <!-- ============ ONBOARDING ============ -->
 <div class="onboard" id="onboard" hidden>
-  <div class="ob-step" id="obStep1">
+  <div class="ob-step" id="obStep0" hidden>
     <h1>Clear Days</h1>
     <p class="tagline">Watch your clear days add up.</p>
+    <div class="demo-cal" id="demoCal"></div>
+    <div class="how-list">
+      <div class="how-row">
+        <span class="dot sober-dot" style="background:#2edb4b; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75)"></span>
+        <span>Tap a day, log what you had. A day with none turns bright green.</span>
+      </div>
+      <div class="how-row">
+        <span class="dot" style="background:#f85149"></span>
+        <span>Heavier days shade yellow through red — scaled to what heavy means for you.</span>
+      </div>
+      <div class="how-row">
+        <span class="dot" style="background:linear-gradient(135deg,#2edb4b,#d29922,#f85149)"></span>
+        <span>A few weeks in, your pattern is obvious at a glance.</span>
+      </div>
+    </div>
+    <button class="btn btn-save" id="btnStart">Get started</button>
+  </div>
+  <div class="ob-step" id="obStep1" hidden>
     <h2>What are you quitting?</h2>
     <div class="sub-cards">
       <button class="sub-card" data-sub="weed"><span class="emoji">🌿</span><span><span class="t">Weed</span><br><span class="d">Log each smoke and how high you got</span></span></button>
@@ -442,8 +471,8 @@
     <button class="btn btn-save" id="btnMaxContinue" style="margin-top: 24px">Continue</button>
   </div>
   <div class="ob-step auth-box" id="obStep2" hidden>
-    <h2>Create your account</h2>
-    <p class="sub-note">Your log is saved to your account and synced across devices.</p>
+    <h2 id="authTitle">Create your account</h2>
+    <p class="sub-note" id="authNote">Your log is saved to your account and synced across devices.</p>
     <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
     <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
     <div class="auth-msg" id="authMsg"></div>
@@ -499,7 +528,7 @@
   </div>
 
   <p class="hint" id="storageHint">Synced to your account.</p>
-  <p class="hint" style="margin-top: 6px"><a href="privacy.html" style="color: var(--muted)">Privacy policy</a> · v11</p>
+  <p class="hint" style="margin-top: 6px"><a href="privacy.html" style="color: var(--muted)">Privacy policy</a> · v12</p>
 </div>
 
 <!-- first-run welcome -->
@@ -507,7 +536,7 @@
   <div class="welcome-card">
     <div class="big">👋</div>
     <div class="msg">Welcome to Clear Days</div>
-    <div class="sub">Tap any day on the calendar to log it.<br>Clear days turn green — watch them add up.</div>
+    <div class="sub">Tap any day to log it — today, or any day back you remember.<br>Clear days turn green — watch them add up.</div>
     <button class="btn btn-save" id="btnWelcomeOk">OK</button>
   </div>
 </div>
@@ -631,14 +660,14 @@
 
   /* ---- colour ---- */
   const SOBER_COLOR = '#2edb4b'; /* vivid green, hue ~130 */
+  /* t: 0 = lightest logged day, 1 = their heaviest. starts at yellow-green (hue ~81), never pure
+     green — sober stays visually unique; saturation rises toward the red end for a deeper max red */
+  const rampColor = t => 'hsl(' + (81 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
   function dayColor(entry) {
     if (!entry) return null;
     const score = entryScore(entry);
     if (score === 0) return SOBER_COLOR;
-    /* smoked days start at yellow-green (hue ~81); never pure green — sober stays visually unique;
-       saturation rises toward the red end for a deeper max red */
-    const t = Math.min(score / maxScoreFor(), 1);
-    return 'hsl(' + (81 * (1 - t)) + ',' + (72 + 10 * t) + '%,' + (50 - 5 * t) + '%)';
+    return rampColor(Math.min(score / maxScoreFor(), 1));
   }
   const chipColor = v => 'hsl(' + (100 * (1 - v / 5)) + ',72%,46%)';
 
@@ -821,7 +850,7 @@
   function openLogSheet(k) {
     editKey = k;
     $('sheetDate').textContent = fmtLong(new Date(k + 'T00:00:00'));
-    $('sheetSub').textContent = k === todayKey ? 'Today' : '';
+    $('sheetSub').textContent = k === todayKey ? 'Today — update it again later if the day changes' : '';
     const existing = data[k];
     selCount = entryCount(existing);
     selHighs = existing && existing.highs ? existing.highs.slice() : [];
@@ -830,6 +859,11 @@
     $('btnClearDay').style.display = existing ? '' : 'none';
     showSheet($('sheet'));
   }
+
+  /* today is still in progress, so a zero isn't a finished clear day yet */
+  const zeroCaption = () => editKey === todayKey
+    ? 'Nothing so far today.'
+    : '🎉 A clear day — nice one.';
 
   function renderLogBody() {
     const body = $('logBody');
@@ -868,7 +902,7 @@
       body.appendChild(st);
       const cap = document.createElement('div'); cap.className = 'step-caption';
       cap.update = () => {
-        if (selCount === 0) { cap.textContent = '🎉 A clear day — nice one.'; cap.classList.add('sober'); }
+        if (selCount === 0) { cap.textContent = zeroCaption(); cap.classList.add('sober'); }
         else { cap.textContent = selCount + ' ' + (selCount === 1 ? SUB.unit : SUB.unitPlural); cap.classList.remove('sober'); }
       };
       cap.update();
@@ -880,7 +914,7 @@
     const wrap = document.createElement('div'); wrap.className = 'high-block';
     if (selCount === 0) {
       const p = document.createElement('label'); p.className = 'q';
-      p.textContent = '🎉 A clear day — nice one.';
+      p.textContent = zeroCaption();
       wrap.appendChild(p);
       return wrap;
     }
@@ -918,7 +952,17 @@
     data[editKey] = SUB.hasIntensity ? { highs: selHighs.slice(0, selCount) } : { count: selCount };
     persist(); closeSheet(); showInfo(editKey);
     maybeCelebrate(editKey);
+    trackFirstLog();
   });
+
+  /* activation metric: did a new account ever actually log anything? fires once per device */
+  function trackFirstLog() {
+    try {
+      if (localStorage.getItem('qt_first_log')) return;
+      localStorage.setItem('qt_first_log', '1');
+    } catch (e) { return; }
+    track('first_log');
+  }
 
   /* ═══════════════ CELEBRATION ═══════════════ */
   function maybeCelebrate(k) {
@@ -929,6 +973,12 @@
       while (isSoberKey(key(d))) { streak++; d = addDays(d, -1); }
       if (streak > 0 && streak % 10 === 0) {
         celebrate('🏆', streak + ' days clear!', 'A huge milestone — keep going.');
+        return;
+      }
+      /* today isn't over, so praise the run so far rather than a finished day */
+      if (k === todayKey) {
+        celebrate('🎉', 'Clear so far today',
+          streak > 1 ? streak + ' days in a row if it holds.' : 'Keep it going.');
         return;
       }
       celebrate('🎉', 'A clear day!',
@@ -1136,21 +1186,40 @@
     for (const s in SUBSTANCES) localStorage.removeItem('qt_log_' + s);
     data = {};
     $('app').hidden = true;
-    showOnboard(1);
+    showOnboard(0);
   }
 
   /* ═══════════════ ONBOARDING ═══════════════ */
   let pendingSub = null;
 
+  /* miniature three-week calendar on the explainer, painted with the real colour ramp
+     so it can never drift from what they'll actually see. null = unlogged, 0 = clear */
+  (function buildDemoCal() {
+    const el = $('demoCal');
+    const DEMO = [null, 8, 7, 8, 6, 5, 6,
+                     5, 4, 5, 3, 2, 3, 0,
+                     2, 0, 1, 0, 0, 0, null];
+    const HEAVY = 8;
+    DEMO.forEach(v => {
+      const cell = document.createElement('i');
+      if (v === 0) { cell.style.background = SOBER_COLOR; cell.className = 'sober'; }
+      else if (v !== null) cell.style.background = rampColor(Math.min(v / HEAVY, 1));
+      el.appendChild(cell);
+    });
+  })();
+
+  $('btnStart').addEventListener('click', () => showOnboard(1));
+
   function showOnboard(step) {
     $('onboard').hidden = false;
+    $('obStep0').hidden = step !== 0;
     $('obStep1').hidden = step !== 1;
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
     $('authMsg').textContent = '';
-    if (step === 2 && !configured()) {
-      msg('Server not set up yet — see the setup note inside this file.');
+    if (step === 2) {
+      if (!configured()) msg('Server not set up yet — see the setup note inside this file.');
     }
     if (step === 'home') setupHomeStep();
   }
@@ -1300,7 +1369,7 @@
 
   /* ---- boot ---- */
   if (profile && profile.substance && profile.email) startApp();
-  else showOnboard(1);
+  else showOnboard(0);
 })();
 </script>
 </body>
