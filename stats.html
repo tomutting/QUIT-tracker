@@ -147,14 +147,16 @@ async function load() {
     stat(withLogs.length, 'ever logged') +
     stat(activeLast7, 'active last 7 days');
 
-  /* cohorts by month of first log */
+  /* cohorts by signup month (fallback: first-log month for accounts predating createdAt).
+     every account with either date gets a row, even before its first log */
   const cohorts = {};
-  withLogs.forEach(u => {
-    const c = (u.created || u.first).slice(0, 7);   /* cohort = signup month; falls back to first log for old accounts */
+  users.filter(u => u.created || u.first).forEach(u => {
+    const c = (u.created || u.first).slice(0, 7);
     cohorts[c] = cohorts[c] || { n: 0, d1: 0, d7: 0, d30: 0 };
     cohorts[c].n++;
-    const last = u.days[u.days.length - 1];
-    const span = dayDiff(u.first, last);
+    if (!u.days) return;                             /* no logs yet: counted, zero retention */
+    const base = u.created || u.first;
+    const span = dayDiff(base, u.days[u.days.length - 1]);
     if (span >= 1) cohorts[c].d1++;
     if (span >= 7) cohorts[c].d7++;
     if (span >= 30) cohorts[c].d30++;
