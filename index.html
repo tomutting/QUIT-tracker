@@ -119,6 +119,8 @@
   }
   .btn:disabled { opacity: 0.5; }
   .auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .btn-link { background: none; border: none; color: var(--muted); font-size: 13px; padding: 12px 0 0; text-decoration: underline; cursor: pointer; width: 100%; }
+  .home-emoji { font-size: 46px; margin-bottom: 8px; filter: drop-shadow(0 4px 16px rgba(63,185,80,0.35)); }
 
   /* ================= MAIN APP ================= */
   .topbar { position: relative; height: 0; z-index: 5; }
@@ -425,6 +427,13 @@
       <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
     </div>
   </div>
+  <div class="ob-step" id="obStep3" hidden>
+    <div class="home-emoji">📲</div>
+    <h2>Add Clear Days to your home screen</h2>
+    <p class="tagline" id="homeInstructions" style="margin:-6px 0 22px"></p>
+    <button class="btn btn-save" id="btnAddHome">Add to Home Screen</button>
+    <button class="btn-link" id="btnSkipHome">Skip for now</button>
+  </div>
 </div>
 
 <!-- ============ MAIN APP ============ -->
@@ -528,6 +537,12 @@
 
   const $ = id => document.getElementById(id);
   const configured = () => FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE') === -1;
+
+  /* ---- add-to-home-screen support ---- */
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstallPrompt = e; });
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
   /* ---- lightweight, cookie-free event counts (no SDK needed) ---- */
   function track(t) {
@@ -1102,13 +1117,44 @@
     $('obStep1').hidden = step !== 1;
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
+    $('obStep3').hidden = step !== 'home';
     $('authMsg').textContent = '';
     if (step === 2 && !configured()) {
       msg('Server not set up yet — see the setup note inside this file.');
     }
+    if (step === 'home') setupHomeStep();
   }
   function hideOnboard() { $('onboard').hidden = true; }
   function msg(t, ok) { const m = $('authMsg'); m.textContent = t; m.className = 'auth-msg' + (ok ? ' ok' : ''); }
+  function finishOnboarding() { hideOnboard(); startApp(); }
+
+  /* after account creation/sign-in: offer to add to home screen, unless already installed */
+  function afterAuth() {
+    if (isStandalone()) { finishOnboarding(); return; }
+    showOnboard('home');
+  }
+  function setupHomeStep() {
+    const p = $('homeInstructions');
+    const btn = $('btnAddHome');
+    if (deferredInstallPrompt) {
+      p.textContent = 'One tap and it lives right on your home screen, like any other app.';
+      btn.textContent = 'Add to Home Screen';
+      btn.onclick = async () => {
+        try { deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; } catch (e) {}
+        deferredInstallPrompt = null;
+        finishOnboarding();
+      };
+    } else if (isIOS()) {
+      p.innerHTML = 'Tap the Share icon <span style="font-size:16px">⬆️</span> below, then "Add to Home Screen."';
+      btn.textContent = 'Got it';
+      btn.onclick = finishOnboarding;
+    } else {
+      p.textContent = 'Open your browser menu and choose "Add to Home screen" or "Install app."';
+      btn.textContent = 'Got it';
+      btn.onclick = finishOnboarding;
+    }
+  }
+  $('btnSkipHome').addEventListener('click', finishOnboarding);
 
   let pendingMax = 6;
 
@@ -1154,7 +1200,7 @@
       saveProfile();
       pushAll();
       track(mode === 'signup' ? 'signup' : 'login');
-      hideOnboard(); startApp();
+      afterAuth();
     } catch (e) {
       msg(authErrMsg(e));
     } finally {
