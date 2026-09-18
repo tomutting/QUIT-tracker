@@ -24,7 +24,8 @@
   5. Project settings (gear icon) → Your apps → Web app (</>) → register →
      copy apiKey, authDomain, projectId into FIREBASE_CONFIG in the <script>
      at the bottom of this file.
-  Until then the app works fine locally — accounts just show a "not configured" note.
+  Until then, the onboarding auth step just shows a "not configured" note — an account
+  is required to use the app, so fill this in before shipping.
   ══════════════════════════════════════════════════════════════════════════
 -->
 <style>
@@ -116,7 +117,6 @@
     background: rgba(255,255,255,0.04); color: var(--text);
     border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
   }
-  .btn-link { background: none; border: none; color: var(--muted); font-size: 13px; padding: 12px 0 0; text-decoration: underline; cursor: pointer; width: 100%; }
   .btn:disabled { opacity: 0.5; }
   .auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 
@@ -415,15 +415,14 @@
     <button class="btn btn-save" id="btnMaxContinue" style="margin-top: 24px">Continue</button>
   </div>
   <div class="ob-step auth-box" id="obStep2" hidden>
-    <h2>Back up your progress</h2>
-    <p class="sub-note">An account syncs your log across devices.</p>
+    <h2>Create your account</h2>
+    <p class="sub-note">Your log is saved to your account and synced across devices.</p>
     <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
     <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
     <div class="auth-msg" id="authMsg"></div>
     <div class="auth-actions">
       <button class="btn btn-save" id="btnSignup">Create account</button>
       <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
-      <button class="btn-link" id="btnSkip">Skip for now — keep data on this device</button>
     </div>
   </div>
 </div>
@@ -464,8 +463,8 @@
     <div class="selected-info" id="selInfo"></div>
   </div>
 
-  <p class="hint" id="storageHint">Data is saved on this device in your browser.</p>
-  <p class="hint" style="margin-top: 6px"><a href="privacy.html" style="color: var(--muted)">Privacy policy</a> · v10</p>
+  <p class="hint" id="storageHint">Synced to your account.</p>
+  <p class="hint" style="margin-top: 6px"><a href="privacy.html" style="color: var(--muted)">Privacy policy</a> · v11</p>
 </div>
 
 <!-- first-run welcome -->
@@ -1027,19 +1026,16 @@
     const pill = $('acctPill');
     pill.classList.remove('synced');
     if (!profile) return;
-    if (profile.local) { pill.textContent = '💾 local only'; }
-    else if (state === 'synced') { pill.textContent = '☁️ ' + (profile.email || 'synced'); pill.classList.add('synced'); }
+    if (state === 'synced') { pill.textContent = '☁️ ' + (profile.email || 'synced'); pill.classList.add('synced'); }
     else if (state === 'error') { pill.textContent = '⚠️ sync failed'; }
     else { pill.textContent = '☁️ ' + (profile.email || '…'); }
-    $('storageHint').textContent = profile.local
-      ? 'Data is saved on this device. Create an account (tap ⋯ top-right) to back it up.'
-      : 'Synced to your account.';
+    $('storageHint').textContent = 'Synced to your account.';
   }
 
   $('acctPill').addEventListener('click', openAcctSheet);
 
   function openAcctSheet() {
-    $('acctStatus').textContent = profile.local ? 'Not signed in — data lives on this device only.' : 'Signed in as ' + profile.email;
+    $('acctStatus').textContent = 'Signed in as ' + profile.email;
     $('acctSub').textContent = SUB.emoji + ' ' + SUB.name;
     const sw = $('subSwitch');
     sw.innerHTML = '';
@@ -1072,48 +1068,41 @@
 
     const acts = $('acctActions');
     acts.innerHTML = '';
-    if (profile.local) {
-      const b = document.createElement('button');
-      b.className = 'btn btn-save';
-      b.textContent = 'Create account / sign in';
-      b.addEventListener('click', () => { closeSheet(); showOnboard(2, true); });
-      acts.appendChild(b);
-    } else {
-      const b = document.createElement('button');
-      b.className = 'btn btn-clear';
-      b.textContent = 'Sign out';
-      b.addEventListener('click', async () => {
-        try { await initFirebase(); await firebase.auth().signOut(); } catch (e) {}
-        user = null;
-        profile = null;
-        /* clear this device's copy — the account's data lives safely in the cloud.
-           prevents the next signup on this device inheriting it */
-        localStorage.removeItem('qt_profile');
-        localStorage.removeItem('clearDaysLog');
-        for (const s in SUBSTANCES) localStorage.removeItem('qt_log_' + s);
-        data = {};
-        closeSheet();
-        $('app').hidden = true;
-        showOnboard(1, false);
-      });
-      acts.appendChild(b);
-    }
+    const b = document.createElement('button');
+    b.className = 'btn btn-clear';
+    b.textContent = 'Sign out';
+    b.addEventListener('click', async () => {
+      try { await initFirebase(); await firebase.auth().signOut(); } catch (e) {}
+      closeSheet();
+      forceReauth();
+    });
+    acts.appendChild(b);
     showSheet($('acctSheet'));
+  }
+
+  /* clears this device's copy — the account's data lives safely in the cloud, and
+     prevents the next signup on this device inheriting it — then sends the user
+     back to onboarding so they must sign in or create an account again */
+  function forceReauth() {
+    user = null;
+    profile = null;
+    localStorage.removeItem('qt_profile');
+    localStorage.removeItem('clearDaysLog');
+    for (const s in SUBSTANCES) localStorage.removeItem('qt_log_' + s);
+    data = {};
+    $('app').hidden = true;
+    showOnboard(1);
   }
 
   /* ═══════════════ ONBOARDING ═══════════════ */
   let pendingSub = null;
-  let fromAccountSheet = false;
 
-  function showOnboard(step, fromAcct) {
-    fromAccountSheet = !!fromAcct;
+  function showOnboard(step) {
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('authMsg').textContent = '';
-    $('btnSkip').hidden = false;
-    $('btnSkip').textContent = fromAcct ? 'Cancel' : 'Skip for now — keep data on this device';
     if (step === 2 && !configured()) {
       msg('Server not set up yet — see the setup note inside this file.');
     }
@@ -1130,7 +1119,7 @@
       pendingMax = (profile && profile.maxCounts && profile.maxCounts[pendingSub]) || SUBSTANCES[pendingSub].maxCount;
       $('maxQ').textContent = SUBSTANCES[pendingSub].maxQ;
       $('obMaxNum').textContent = pendingMax;
-      showOnboard('max', false);
+      showOnboard('max');
     });
   });
 
@@ -1140,15 +1129,7 @@
   $('obMaxPlus').addEventListener('click', () => {
     if (pendingMax < MAX_LIMITS[pendingSub].max) $('obMaxNum').textContent = ++pendingMax;
   });
-  $('btnMaxContinue').addEventListener('click', () => showOnboard(2, false));
-
-  $('btnSkip').addEventListener('click', () => {
-    if (fromAccountSheet) { hideOnboard(); return; }
-    profile = { substance: pendingSub, local: true, maxCounts: {} };
-    profile.maxCounts[pendingSub] = pendingMax;
-    saveProfile();
-    hideOnboard(); startApp();
-  });
+  $('btnMaxContinue').addEventListener('click', () => showOnboard(2));
 
   async function doAuth(mode) {
     if (!configured()) { msg('Server not set up yet — see the setup note inside this file.'); return; }
@@ -1165,10 +1146,9 @@
         ? await auth.createUserWithEmailAndPassword(email, pass)
         : await auth.signInWithEmailAndPassword(email, pass);
       user = cred.user;
-      const sub = fromAccountSheet ? profile.substance : pendingSub;
-      const mc = (fromAccountSheet && profile.maxCounts) ? profile.maxCounts : {};
-      if (!fromAccountSheet) mc[pendingSub] = pendingMax;
-      profile = { substance: sub, email: email, uid: user.uid, local: false, maxCounts: mc,
+      const mc = {};
+      mc[pendingSub] = pendingMax;
+      profile = { substance: pendingSub, email: email, uid: user.uid, maxCounts: mc,
                   createdAt: mode === 'signup' ? new Date().toISOString() : null };
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
@@ -1206,15 +1186,15 @@
       else $('welcomePop').hidden = false;
     }
     /* resume server session */
-    if (!profile.local && configured()) {
+    if (configured()) {
       initFirebase().then(() => {
         firebase.auth().onAuthStateChanged(async u => {
           if (u) {
             user = u;
             try { await pullMerge(false); applySubstance(); pushAll(); } catch (e) { setPill('error'); }
           } else {
-            /* session expired */
-            profile.local = true; saveProfile(); setPill();
+            /* session expired — must sign in again, no local-only fallback */
+            forceReauth();
           }
         });
       }).catch(() => setPill('error'));
@@ -1229,8 +1209,8 @@
   });
 
   /* ---- boot ---- */
-  if (profile && profile.substance) startApp();
-  else showOnboard(1, false);
+  if (profile && profile.substance && profile.email) startApp();
+  else showOnboard(1);
 })();
 </script>
 </body>
