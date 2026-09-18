@@ -1079,8 +1079,11 @@
       b.addEventListener('click', async () => {
         try { await initFirebase(); await firebase.auth().signOut(); } catch (e) {}
         user = null;
-        profile = { substance: profile.substance, local: true };
-        saveProfile(); setPill(); closeSheet();
+        profile = null;
+        localStorage.removeItem('qt_profile');
+        closeSheet();
+        $('app').hidden = true;
+        showOnboard(1, false);
       });
       acts.appendChild(b);
     }
