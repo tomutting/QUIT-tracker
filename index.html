@@ -530,6 +530,29 @@
   const $ = id => document.getElementById(id);
   const configured = () => FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE') === -1;
 
+  /* ---- lightweight, cookie-free event counts (no SDK needed) ---- */
+  function track(t) {
+    try {
+      if (!configured()) return;
+      const src = new URLSearchParams(location.search).get('utm_source')
+        || (document.referrer ? new URL(document.referrer).hostname : 'direct');
+      fetch('https://firestore.googleapis.com/v1/projects/' + FIREBASE_CONFIG.projectId +
+            '/databases/(default)/documents/events?key=' + FIREBASE_CONFIG.apiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          t:   { stringValue: t },
+          src: { stringValue: String(src).slice(0, 60) },
+          ts:  { stringValue: new Date().toISOString() }
+        }})
+      }).catch(() => {});
+    } catch (e) {}
+  }
+  /* one visit event per browser session */
+  try {
+    if (!sessionStorage.getItem('qt_v')) { sessionStorage.setItem('qt_v', '1'); track('visit'); }
+  } catch (e) { track('visit'); }
+
   /* ---- state ---- */
   let profile = null;
   try { profile = JSON.parse(localStorage.getItem('qt_profile')) || null; } catch (e) {}
@@ -1089,6 +1112,7 @@
   document.querySelectorAll('.sub-card').forEach(card => {
     card.addEventListener('click', () => {
       pendingSub = card.dataset.sub;
+      track('onboard_' + pendingSub);
       pendingMax = (profile && profile.maxCounts && profile.maxCounts[pendingSub]) || SUBSTANCES[pendingSub].maxCount;
       $('maxQ').textContent = SUBSTANCES[pendingSub].maxQ;
       $('obMaxNum').textContent = pendingMax;
@@ -1134,6 +1158,7 @@
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
       pushAll();
+      track(mode === 'signup' ? 'signup' : 'login');
       hideOnboard(); startApp();
     } catch (e) {
       msg(authErrMsg(e));

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1412">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Clear Days — Stats</title>
+<style>
+  :root { --text:#eef2f7; --muted:#7b8591; --accent:#3fb950; --border:rgba(255,255,255,0.085); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { background:#0b1412; }
+  body {
+    min-height:100vh; color:var(--text);
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(63,185,80,0.12), transparent 60%),
+                linear-gradient(180deg,#090d12 0%,#070a0e 100%);
+    background-attachment:fixed;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding:28px 16px 60px; max-width:720px; margin:0 auto;
+  }
+  h1 { font-size:22px; font-weight:800;
+    background:linear-gradient(135deg,#d7ffe0 0%,#3fb950 55%,#1f7a33 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .sub { color:var(--muted); font-size:12.5px; margin:2px 0 22px; }
+  .card { background:linear-gradient(160deg,rgba(255,255,255,0.055),rgba(255,255,255,0.018));
+    border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:14px;
+    box-shadow:0 12px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07); }
+  .card h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
+  .stat { background:rgba(0,0,0,0.3); border-radius:10px; padding:10px; border:1px solid rgba(255,255,255,0.05); }
+  .stat .v { font-size:22px; font-weight:800; color:var(--accent); }
+  .stat .k { font-size:11px; color:var(--muted); margin-top:2px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  td.num, th.num { text-align:right; }
+  .field { width:100%; padding:13px; margin-bottom:10px; border-radius:11px; border:1px solid var(--border);
+    background:rgba(0,0,0,0.35); color:var(--text); font-size:15px; outline:none; }
+  .btn { width:100%; padding:13px 0; border-radius:11px; font-size:15px; font-weight:700; border:none; cursor:pointer;
+    background:linear-gradient(180deg,#3fb950,#2a8c3c); color:#fff; }
+  .msg { min-height:18px; font-size:12.5px; color:#f85149; margin:6px 0; text-align:center; }
+  .muted { color:var(--muted); font-size:12px; }
+  #dash { display:none; }
+</style>
+</head>
+<body>
+<h1>Clear Days — Stats</h1>
+<p class="sub">Private dashboard. Admin sign-in required.</p>
+
+<div class="card" id="loginCard">
+  <input class="field" type="email" id="email" placeholder="Admin email" autocomplete="email">
+  <input class="field" type="password" id="pass" placeholder="Password" autocomplete="current-password">
+  <div class="msg" id="msg"></div>
+  <button class="btn" id="btnGo">View stats</button>
+</div>
+
+<div id="dash">
+  <div class="card">
+    <h2>Funnel (all time)</h2>
+    <div class="grid" id="funnel"></div>
+  </div>
+  <div class="card">
+    <h2>By source</h2>
+    <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
+    <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer.</p>
+  </div>
+  <div class="card">
+    <h2>Users &amp; retention</h2>
+    <div class="grid" id="userStats" style="margin-bottom:14px"></div>
+    <table id="cohortTable"><thead><tr><th>Cohort (first log)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">7d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table>
+    <p class="muted" style="margin-top:8px">"Back after Nd+" = logged at least one day N or more days after their first log. Accounts only — local-only users aren't visible.</p>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyChbXL7kaHEiMqQZCi2uB9obNu-qly_rDA",
+  authDomain: "qutting-app.firebaseapp.com",
+  projectId: "qutting-app"
+});
+const db = firebase.firestore();
+const $ = id => document.getElementById(id);
+
+$('btnGo').addEventListener('click', async () => {
+  $('msg').textContent = 'Signing in…';
+  try {
+    await firebase.auth().signInWithEmailAndPassword($('email').value.trim(), $('pass').value);
+    $('msg').textContent = 'Loading…';
+    await load();
+    $('loginCard').style.display = 'none';
+    $('dash').style.display = 'block';
+  } catch (e) {
+    $('msg').textContent = e.message || 'Failed. Admin accounts only.';
+  }
+});
+
+function stat(v, k) { return '<div class="stat"><div class="v">' + v + '</div><div class="k">' + k + '</div></div>'; }
+
+async function load() {
+  /* ---- events funnel ---- */
+  const ev = await db.collection('events').get();
+  const counts = {}, bySrc = {};
+  ev.forEach(d => {
+    const e = d.data();
+    counts[e.t] = (counts[e.t] || 0) + 1;
+    const s = e.src || 'direct';
+    bySrc[s] = bySrc[s] || { visit: 0, onboard: 0, signup: 0 };
+    if (e.t === 'visit') bySrc[s].visit++;
+    else if (e.t.indexOf('onboard') === 0) bySrc[s].onboard++;
+    else if (e.t === 'signup') bySrc[s].signup++;
+  });
+  const onboards = Object.keys(counts).filter(k => k.indexOf('onboard') === 0).reduce((a, k) => a + counts[k], 0);
+  $('funnel').innerHTML =
+    stat(counts.visit || 0, 'visits') +
+    stat(onboards, 'onboarding starts') +
+    stat(counts.signup || 0, 'signups') +
+    stat(counts.login || 0, 'logins') +
+    stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
+  const tb = $('srcTable').querySelector('tbody');
+  tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
+    '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard + '</td><td class="num">' + bySrc[s].signup + '</td></tr>'
+  ).join('') || '<tr><td colspan="4" class="muted">No events yet</td></tr>';
+
+  /* ---- users & retention from their actual logs ---- */
+  const us = await db.collection('users').get();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const users = [];
+  us.forEach(d => {
+    const u = d.data();
+    const days = new Set();
+    const logs = u.logs || {};
+    for (const sub in logs) for (const k in logs[sub]) days.add(k);
+    if (!days.size) { users.push({ first: null }); return; }
+    const sorted = [...days].sort();
+    users.push({ first: sorted[0], days: sorted });
+  });
+  const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const withLogs = users.filter(u => u.first);
+  const activeLast7 = withLogs.filter(u => dayDiff(u.days[u.days.length - 1], today.toISOString().slice(0, 10)) <= 7).length;
+  $('userStats').innerHTML =
+    stat(users.length, 'accounts') +
+    stat(withLogs.length, 'ever logged') +
+    stat(activeLast7, 'active last 7 days');
+
+  /* cohorts by month of first log */
+  const cohorts = {};
+  withLogs.forEach(u => {
+    const c = u.first.slice(0, 7);
+    cohorts[c] = cohorts[c] || { n: 0, d1: 0, d7: 0, d30: 0 };
+    cohorts[c].n++;
+    const last = u.days[u.days.length - 1];
+    const span = dayDiff(u.first, last);
+    if (span >= 1) cohorts[c].d1++;
+    if (span >= 7) cohorts[c].d7++;
+    if (span >= 30) cohorts[c].d30++;
+  });
+  const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
+  $('cohortTable').querySelector('tbody').innerHTML = Object.keys(cohorts).sort().map(c =>
+    '<tr><td>' + c + '</td><td class="num">' + cohorts[c].n + '</td><td class="num">' + pct(cohorts[c].d1, cohorts[c].n) +
+    '</td><td class="num">' + pct(cohorts[c].d7, cohorts[c].n) + '</td><td class="num">' + pct(cohorts[c].d30, cohorts[c].n) + '</td></tr>'
+  ).join('') || '<tr><td colspan="5" class="muted">No logged users yet</td></tr>';
+}
+</script>
+</body>
+</html>
