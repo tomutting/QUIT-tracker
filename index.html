@@ -1080,7 +1080,12 @@
         try { await initFirebase(); await firebase.auth().signOut(); } catch (e) {}
         user = null;
         profile = null;
+        /* clear this device's copy — the account's data lives safely in the cloud.
+           prevents the next signup on this device inheriting it */
         localStorage.removeItem('qt_profile');
+        localStorage.removeItem('clearDaysLog');
+        for (const s in SUBSTANCES) localStorage.removeItem('qt_log_' + s);
+        data = {};
         closeSheet();
         $('app').hidden = true;
         showOnboard(1, false);
