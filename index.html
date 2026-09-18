@@ -473,7 +473,7 @@
   <div class="streaks">
     <div class="streak-card"><div class="num" id="curStreak">0</div><div class="lbl">Day streak</div></div>
     <div class="streak-card best"><div class="num" id="bestStreak">0</div><div class="lbl">Best streak</div></div>
-    <div class="streak-card"><div class="num" id="totalSober">0</div><div class="lbl">Sober days</div></div>
+    <div class="streak-card"><div class="num" id="totalSober">0</div><div class="lbl" id="totalSoberLbl">Sober days</div></div>
   </div>
 
   <div class="cal-wrap">
@@ -487,7 +487,7 @@
       <div class="mini-grid" id="miniGrid"></div>
     </div>
     <div class="legend">
-      <span>Sober</span>
+      <span id="legendZero">Sober</span>
       <div class="swatch" style="background:#2edb4b; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75)"></div>
       <div class="swatch" style="background:#a3b21a"></div>
       <div class="swatch" style="background:#d29922"></div>
@@ -547,12 +547,16 @@
   };
   /* ═══════════════════════════════════════════════════════════════════════════ */
 
+  /* zeroLabel/zeroWord keep "sober" off the substances it doesn't suit (a zero-cigarette day isn't "sober") */
   const SUBSTANCES = {
     weed:    { emoji: '🌿', name: 'Weed',       unit: 'smoke',     unitPlural: 'smokes',     maxCount: 6,  hasIntensity: true,
+               zeroLabel: 'Clear days', zeroWord: 'clear',
                maxQ: 'On a heavy day, how many times would you smoke?' },
     cigs:    { emoji: '🚬', name: 'Cigarettes', unit: 'cigarette', unitPlural: 'cigarettes', maxCount: 20, hasIntensity: false,
+               zeroLabel: 'Smoke-free days', zeroWord: 'smoke-free',
                maxQ: 'On a heavy day, how many cigarettes would you smoke?' },
     alcohol: { emoji: '🍺', name: 'Alcohol',    unit: 'drink',     unitPlural: 'drinks',     maxCount: 10, hasIntensity: false,
+               zeroLabel: 'Sober days', zeroWord: 'sober',
                maxQ: 'On a heavy day, how many drinks would you have?' }
   };
   const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 60 }, alcohol: { min: 1, max: 30 } };
@@ -985,7 +989,7 @@
     if (!e) return;
     const el = $('selInfo');
     const dstr = fmtLong(new Date(k + 'T00:00:00'));
-    if (isSoberEntry(e)) el.textContent = dstr + ' · sober ✓';
+    if (isSoberEntry(e)) el.textContent = dstr + ' · ' + SUB.zeroWord + ' ✓';
     else if (e.highs) el.textContent = dstr + ' · ' + e.highs.length + '× smoked, avg high ' + (entryScore(e) / e.highs.length).toFixed(1);
     else el.textContent = dstr + ' · ' + e.count + ' ' + (e.count === 1 ? SUB.unit : SUB.unitPlural);
   }
@@ -1253,6 +1257,8 @@
     SUB = SUBSTANCES[profile.substance] || SUBSTANCES.weed;
     data = loadLog(profile.substance);
     $('subtitle').textContent = 'Quitting ' + SUB.name.toLowerCase() + ' ' + SUB.emoji + ' — tap a day to log.';
+    $('totalSoberLbl').textContent = SUB.zeroLabel;
+    $('legendZero').textContent = SUB.zeroWord.charAt(0).toUpperCase() + SUB.zeroWord.slice(1);
     paintGrid(); computeStats();
     $('selInfo').textContent = '';
   }
