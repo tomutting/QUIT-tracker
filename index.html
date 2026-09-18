@@ -461,17 +461,8 @@
     <div class="selected-info" id="selInfo"></div>
   </div>
 
-  <div class="stats">
-    <h2>Last 7 days</h2>
-    <div class="stat-grid">
-      <div class="stat"><div class="v" id="wkSmokes">–</div><div class="k"><span id="wkSmokesLbl">smokes</span> <span id="wkTrend"></span></div></div>
-      <div class="stat"><div class="v" id="wkHigh">–</div><div class="k" id="wkHighLbl">avg highness</div></div>
-      <div class="stat"><div class="v" id="moSmokes">–</div><div class="k" id="moSmokesLbl">this month</div></div>
-      <div class="stat"><div class="v" id="loggedDays">–</div><div class="k">days logged</div></div>
-    </div>
-  </div>
-
   <p class="hint" id="storageHint">Data is saved on this device in your browser.</p>
+  <p class="hint" style="margin-top: 6px"><a href="privacy.html" style="color: var(--muted)">Privacy policy</a></p>
 </div>
 
 <!-- first-run welcome -->
@@ -745,33 +736,6 @@
     $('curStreak').textContent = cur;
     $('bestStreak').textContent = best;
     $('totalSober').textContent = Object.keys(data).filter(isSoberKey).length;
-
-    const sumRange = (from, to) => {
-      let count = 0, scoreSum = 0;
-      for (let i = from; i <= to; i++) {
-        const e = data[key(addDays(today, i))];
-        count += entryCount(e); scoreSum += entryScore(e);
-      }
-      return { count, scoreSum };
-    };
-    const wk = sumRange(-6, 0), prev = sumRange(-13, -7);
-    $('wkSmokes').textContent = wk.count;
-    if (SUB.hasIntensity) {
-      $('wkHighLbl').textContent = 'avg highness';
-      $('wkHigh').textContent = wk.count ? (wk.scoreSum / wk.count).toFixed(1) : '—';
-    } else {
-      $('wkHighLbl').textContent = 'avg per day';
-      $('wkHigh').textContent = (wk.count / 7).toFixed(1);
-    }
-    const trendEl = $('wkTrend');
-    if (wk.count < prev.count) { trendEl.textContent = '▼ ' + (prev.count - wk.count); trendEl.className = 'trend-down'; }
-    else if (wk.count > prev.count) { trendEl.textContent = '▲ ' + (wk.count - prev.count); trendEl.className = 'trend-up'; }
-    else trendEl.textContent = '';
-
-    let mo = 0;
-    for (const k in data) if (k.slice(0, 7) === todayKey.slice(0, 7)) mo += entryCount(data[k]);
-    $('moSmokes').textContent = mo;
-    $('loggedDays').textContent = Object.keys(data).length;
   }
 
   /* ═══════════════ SHEETS ═══════════════ */
@@ -889,6 +853,15 @@
   /* ═══════════════ CELEBRATION ═══════════════ */
   function maybeCelebrate(k) {
     const score = entryScore(data[k]);
+    /* clear days always celebrate */
+    if (score === 0) {
+      let streak = 0, d = new Date(k + 'T00:00:00');
+      while (isSoberKey(key(d))) { streak++; d = addDays(d, -1); }
+      celebrate('🎉', 'A clear day!',
+        streak > 1 ? streak + ' clear days in a row. Keep it going.' : 'Every one of these counts.');
+      return;
+    }
+    /* smoked, but less than their recent average → still progress */
     const d0 = new Date(k + 'T00:00:00');
     let sum = 0, logged = 0;
     for (let i = 1; i <= 7; i++) {
@@ -896,14 +869,9 @@
       if (e) { sum += entryScore(e); logged++; }
     }
     if (!logged) return;
-    const avg = sum / logged;
-    if (score >= avg) return;
-    const sober = score === 0;
-    celebrate(
-      sober ? '🎉' : '📉',
-      sober ? 'A clear day!' : 'Better than your average!',
-      sober ? 'Beat your 7-day average. Keep it going.' : 'Lower than your last 7 days. Progress is progress.'
-    );
+    if (score < sum / logged) {
+      celebrate('📉', 'Better than your average!', 'Lower than your last 7 days. Progress is progress.');
+    }
   }
 
   function celebrate(emoji, title, sub) {
@@ -1178,8 +1146,6 @@
     SUB = SUBSTANCES[profile.substance] || SUBSTANCES.weed;
     data = loadLog(profile.substance);
     $('subtitle').textContent = 'Quitting ' + SUB.name.toLowerCase() + ' ' + SUB.emoji + ' — tap a day to log.';
-    $('wkSmokesLbl').textContent = SUB.unitPlural;
-    $('moSmokesLbl').textContent = SUB.unitPlural + ' this month';
     paintGrid(); computeStats();
     $('selInfo').textContent = '';
   }
