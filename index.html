@@ -83,6 +83,12 @@
     padding: 24px 18px;
   }
   .ob-step { width: 100%; max-width: 400px; text-align: center; }
+  /* value-prop page rows */
+  .sell-list { text-align: left; display: flex; flex-direction: column; gap: 13px; margin: 6px 0 18px; }
+  .sell-row { display: flex; gap: 11px; align-items: flex-start; font-size: 14px; color: #c4ccd4; line-height: 1.5; }
+  .sell-row .em { font-size: 18px; flex: 0 0 auto; line-height: 1.3; }
+  .sell-note { color: #7ee787; font-size: 13px; margin-bottom: 20px; text-shadow: 0 0 12px var(--glow-green); }
+
   /* trial mode: nudge bar shown until an account exists */
   .trial-bar {
     display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px;
@@ -443,6 +449,12 @@
       <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log drinks / units per day</span></span></button>
     </div>
   </div>
+  <div class="ob-step" id="obStepWhy" hidden>
+    <h2 id="whyTitle"></h2>
+    <div class="sell-list" id="whyList"></div>
+    <p class="sell-note">Every green day on your calendar is a step there.</p>
+    <button class="btn btn-save" id="btnWhyContinue">I'm ready</button>
+  </div>
   <div class="ob-step" id="obStepMax" hidden>
     <h2 id="maxQ"></h2>
     <p class="tagline" style="margin: -6px 0 22px">This sets your personal scale — that amount shows as deepest red.</p>
@@ -568,13 +580,25 @@
   const SUBSTANCES = {
     weed:    { emoji: '🌿', name: 'Weed',       unit: 'smoke',     unitPlural: 'smokes',     maxCount: 6,  hasIntensity: true,
                zeroLabel: 'Clear days', zeroWord: 'clear',
-               maxQ: 'On a heavy day, how many times would you smoke?' },
+               maxQ: 'On a heavy day, how many times would you smoke?',
+               whyTitle: 'Quitting weed pays you back fast',
+               why: [['🌙', 'Real dreams come back within days — sleep runs deeper after the first weeks.'],
+                     ['🧠', 'Memory and focus sharpen over the first month.'],
+                     ['💷', 'And the money stays in your pocket.']] },
     cigs:    { emoji: '🚬', name: 'Cigarettes', unit: 'cigarette', unitPlural: 'cigarettes', maxCount: 20, hasIntensity: false,
                zeroLabel: 'Smoke-free days', zeroWord: 'smoke-free',
-               maxQ: 'On a heavy day, how many cigarettes would you smoke?' },
+               maxQ: 'On a heavy day, how many cigarettes would you smoke?',
+               whyTitle: 'Your body starts repairing itself in 20 minutes',
+               why: [['❤️', 'Heart rate and blood pressure start easing within a day.'],
+                     ['👃', 'Taste and smell come back within days.'],
+                     ['💷', 'A pack a day is thousands a year back in your pocket.']] },
     alcohol: { emoji: '🍺', name: 'Alcohol',    unit: 'drink',     unitPlural: 'drinks',     maxCount: 10, hasIntensity: false,
                zeroLabel: 'Sober days', zeroWord: 'sober',
-               maxQ: 'On a heavy day, how many drinks would you have?' }
+               maxQ: 'On a heavy day, how many drinks would you have?',
+               whyTitle: 'Drinking less pays you back fast',
+               why: [['😴', 'Deeper sleep and steadier energy within a couple of weeks.'],
+                     ['✨', 'Brighter mood and clearer skin over the first month.'],
+                     ['💷', 'And the money stays in your pocket.']] }
   };
   const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 60 }, alcohol: { min: 1, max: 30 } };
 
@@ -1186,9 +1210,12 @@
   /* ═══════════════ ONBOARDING ═══════════════ */
   let pendingSub = null;
 
-  function showOnboard(step) {
+  /* renderStep paints a step; showOnboard also records it in browser history so
+     back/forward walk the onboarding steps instead of leaving the site */
+  function renderStep(step) {
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
+    $('obStepWhy').hidden = step !== 'why';
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
@@ -1204,6 +1231,18 @@
     }
     if (step === 'home') setupHomeStep();
   }
+  function showOnboard(step) {
+    renderStep(step);
+    try { history.pushState({ ob: step }, ''); } catch (e) {}
+  }
+  window.addEventListener('popstate', e => {
+    /* onboarding finished → back/forward shouldn't reopen its screens */
+    if (profile && profile.email && !profile.pending) return;
+    const s = e.state && e.state.ob;
+    if (s === 'cal' && profile && profile.pending) { hideOnboard(); return; }
+    if (s && s !== 'cal') { renderStep(s); return; }
+    renderStep(1);
+  });
   function hideOnboard() { $('onboard').hidden = true; }
   function msg(t, ok) { const m = $('authMsg'); m.textContent = t; m.className = 'auth-msg' + (ok ? ' ok' : ''); }
   function finishOnboarding() { hideOnboard(); startApp(); }
@@ -1257,9 +1296,17 @@
       pendingMax = (profile && profile.maxCounts && profile.maxCounts[pendingSub]) || SUBSTANCES[pendingSub].maxCount;
       $('maxQ').textContent = SUBSTANCES[pendingSub].maxQ;
       $('obMaxNum').textContent = pendingMax;
-      showOnboard('max');
+      /* value-prop page for what they just picked, then the max question */
+      const S = SUBSTANCES[pendingSub];
+      $('whyTitle').textContent = S.whyTitle;
+      $('whyList').innerHTML = S.why.map(r =>
+        '<div class="sell-row"><span class="em">' + r[0] + '</span><span>' + r[1] + '</span></div>'
+      ).join('');
+      showOnboard('why');
     });
   });
+
+  $('btnWhyContinue').addEventListener('click', () => showOnboard('max'));
 
   $('obMaxMinus').addEventListener('click', () => {
     if (pendingMax > MAX_LIMITS[pendingSub].min) $('obMaxNum').textContent = --pendingMax;
@@ -1275,6 +1322,7 @@
     saveProfile();
     hideOnboard();
     startApp();
+    try { history.pushState({ ob: 'cal' }, ''); } catch (e) {}
   });
 
   $('btnTrialSkip').addEventListener('click', () => showOnboard(2));
@@ -1378,7 +1426,10 @@
 
   /* ---- boot ---- */
   if (profile && profile.substance && (profile.email || profile.pending)) startApp();
-  else showOnboard(1);
+  else {
+    renderStep(1);
+    try { history.replaceState({ ob: 1 }, ''); } catch (e) {}
+  }
 })();
 </script>
 </body>
