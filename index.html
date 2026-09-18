@@ -83,17 +83,18 @@
     padding: 24px 18px;
   }
   .ob-step { width: 100%; max-width: 400px; text-align: center; }
-  /* explainer: miniature calendar + what the colours mean */
-  .demo-cal {
-    display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
-    padding: 12px; margin: 18px 0 20px; border-radius: 14px;
-    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+  /* trial mode: nudge bar shown until an account exists */
+  .trial-bar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px;
+    background: var(--glass); border: 1px solid var(--border); border-radius: 14px;
+    font-size: 12.5px; color: #c4ccd4; text-align: left;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
   }
-  .demo-cal i { aspect-ratio: 1; border-radius: 6px; background: var(--empty); }
-  .demo-cal i.sober { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75); }
-  .how-list { text-align: left; display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-  .how-row { display: flex; gap: 11px; align-items: flex-start; font-size: 13.5px; color: #c4ccd4; line-height: 1.5; }
-  .how-row .dot { width: 17px; height: 17px; border-radius: 5px; flex: 0 0 auto; margin-top: 2px; }
+  .trial-bar b { color: #7ee787; font-weight: 700; }
+  .trial-bar button {
+    margin-left: auto; flex: 0 0 auto; font-size: 12px; color: var(--muted); cursor: pointer;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 6px 11px;
+  }
   .ob-step h1 {
     font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, #d7ffe0 0%, #3fb950 55%, #1f7a33 100%);
@@ -432,27 +433,9 @@
 
 <!-- ============ ONBOARDING ============ -->
 <div class="onboard" id="onboard" hidden>
-  <div class="ob-step" id="obStep0" hidden>
+  <div class="ob-step" id="obStep1" hidden>
     <h1>Clear Days</h1>
     <p class="tagline">Watch your clear days add up.</p>
-    <div class="demo-cal" id="demoCal"></div>
-    <div class="how-list">
-      <div class="how-row">
-        <span class="dot sober-dot" style="background:#2edb4b; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.75)"></span>
-        <span>Tap a day, log what you had. A day with none turns bright green.</span>
-      </div>
-      <div class="how-row">
-        <span class="dot" style="background:#f85149"></span>
-        <span>Heavier days shade yellow through red — scaled to what heavy means for you.</span>
-      </div>
-      <div class="how-row">
-        <span class="dot" style="background:linear-gradient(135deg,#2edb4b,#d29922,#f85149)"></span>
-        <span>A few weeks in, your pattern is obvious at a glance.</span>
-      </div>
-    </div>
-    <button class="btn btn-save" id="btnStart">Get started</button>
-  </div>
-  <div class="ob-step" id="obStep1" hidden>
     <h2>What are you quitting?</h2>
     <div class="sub-cards">
       <button class="sub-card" data-sub="weed"><span class="emoji">🌿</span><span><span class="t">Weed</span><br><span class="d">Log each smoke and how high you got</span></span></button>
@@ -498,6 +481,11 @@
     <h1>Clear Days</h1>
     <p id="subtitle">Tap a day to log. Green days are wins.</p>
   </header>
+
+  <div class="trial-bar" id="trialBar" hidden>
+    <span><b>Try it:</b> tap a day and log it.</span>
+    <button id="btnTrialSkip">Skip for now</button>
+  </div>
 
   <div class="streaks">
     <div class="streak-card"><div class="num" id="curStreak">0</div><div class="lbl">Day streak</div></div>
@@ -953,6 +941,7 @@
     persist(); closeSheet(); showInfo(editKey);
     maybeCelebrate(editKey);
     trackFirstLog();
+    maybePromptAccount();
   });
 
   /* activation metric: did a new account ever actually log anything? fires once per device */
@@ -1121,6 +1110,11 @@
     const pill = $('acctPill');
     pill.classList.remove('synced');
     if (!profile) return;
+    /* trial mode: no account sheet to open, the nudge bar carries the state instead */
+    const trial = !!profile.pending;
+    pill.hidden = trial;
+    $('trialBar').hidden = !trial;
+    if (trial) { $('storageHint').textContent = 'Not saved yet.'; return; }
     if (state === 'synced') { pill.textContent = '☁️ ' + (profile.email || 'synced'); pill.classList.add('synced'); }
     else if (state === 'error') { pill.textContent = '⚠️ sync failed'; }
     else { pill.textContent = '☁️ ' + (profile.email || '…'); }
@@ -1186,39 +1180,26 @@
     for (const s in SUBSTANCES) localStorage.removeItem('qt_log_' + s);
     data = {};
     $('app').hidden = true;
-    showOnboard(0);
+    showOnboard(1);
   }
 
   /* ═══════════════ ONBOARDING ═══════════════ */
   let pendingSub = null;
 
-  /* miniature three-week calendar on the explainer, painted with the real colour ramp
-     so it can never drift from what they'll actually see. null = unlogged, 0 = clear */
-  (function buildDemoCal() {
-    const el = $('demoCal');
-    const DEMO = [null, 8, 7, 8, 6, 5, 6,
-                     5, 4, 5, 3, 2, 3, 0,
-                     2, 0, 1, 0, 0, 0, null];
-    const HEAVY = 8;
-    DEMO.forEach(v => {
-      const cell = document.createElement('i');
-      if (v === 0) { cell.style.background = SOBER_COLOR; cell.className = 'sober'; }
-      else if (v !== null) cell.style.background = rampColor(Math.min(v / HEAVY, 1));
-      el.appendChild(cell);
-    });
-  })();
-
-  $('btnStart').addEventListener('click', () => showOnboard(1));
-
   function showOnboard(step) {
     $('onboard').hidden = false;
-    $('obStep0').hidden = step !== 0;
     $('obStep1').hidden = step !== 1;
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
     $('authMsg').textContent = '';
     if (step === 2) {
+      /* logged something during the trial → lead with keeping it; skipped → plain signup */
+      const saving = profile && profile.pending && Object.keys(data).length > 0;
+      $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
+      $('authNote').textContent = saving
+        ? 'Your log is only on this device. An account keeps it safe and syncs it everywhere.'
+        : 'Your log is saved to your account and synced across devices.';
       if (!configured()) msg('Server not set up yet — see the setup note inside this file.');
     }
     if (step === 'home') setupHomeStep();
@@ -1286,7 +1267,26 @@
   $('obMaxPlus').addEventListener('click', () => {
     if (pendingMax < MAX_LIMITS[pendingSub].max) $('obMaxNum').textContent = ++pendingMax;
   });
-  $('btnMaxContinue').addEventListener('click', () => showOnboard(2));
+  /* into the real calendar on a trial profile — the account ask comes after their
+     first logged day (or straight away via the skip on the trial bar) */
+  $('btnMaxContinue').addEventListener('click', () => {
+    profile = { substance: pendingSub, maxCounts: {}, pending: true };
+    profile.maxCounts[pendingSub] = pendingMax;
+    saveProfile();
+    hideOnboard();
+    startApp();
+  });
+
+  $('btnTrialSkip').addEventListener('click', () => showOnboard(2));
+
+  /* first log made on a trial profile → let the celebration land, then ask them to save it */
+  function maybePromptAccount() {
+    if (!profile || !profile.pending) return;
+    setTimeout(() => {
+      if (!profile || !profile.pending) return;
+      showOnboard(2);
+    }, 2200);
+  }
 
   async function doAuth(mode) {
     if (!configured()) { msg('Server not set up yet — see the setup note inside this file.'); return; }
@@ -1303,9 +1303,12 @@
         ? await auth.createUserWithEmailAndPassword(email, pass)
         : await auth.signInWithEmailAndPassword(email, pass);
       user = cred.user;
-      const mc = {};
-      mc[pendingSub] = pendingMax;
-      profile = { substance: pendingSub, email: email, uid: user.uid, maxCounts: mc,
+      /* carry the trial profile's choices over; anything logged during the trial is
+         already in localStorage and goes up with the pushAll below */
+      const sub = (profile && profile.substance) || pendingSub;
+      const mc = Object.assign({}, (profile && profile.maxCounts) || {});
+      if (!mc[sub]) mc[sub] = pendingMax;
+      profile = { substance: sub, email: email, uid: user.uid, maxCounts: mc,
                   createdAt: mode === 'signup' ? new Date().toISOString() : null };
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
@@ -1344,6 +1347,12 @@
       if (Object.keys(data).length) localStorage.setItem('qt_welcomed', '1');
       else $('welcomePop').hidden = false;
     }
+    /* trial profile: nothing to sync. if they logged and then closed the account screen
+       (or refreshed on it), put it straight back in front of them */
+    if (profile.pending) {
+      if (Object.keys(data).length) showOnboard(2);
+      return;
+    }
     /* resume server session */
     if (configured()) {
       initFirebase().then(() => {
@@ -1368,8 +1377,8 @@
   });
 
   /* ---- boot ---- */
-  if (profile && profile.substance && profile.email) startApp();
-  else showOnboard(0);
+  if (profile && profile.substance && (profile.email || profile.pending)) startApp();
+  else showOnboard(1);
 })();
 </script>
 </body>
