@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0b1412">
 <meta name="color-scheme" content="dark">
+<!-- launches full-screen (no browser bars) once added to the home screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Clear Days">
 <title>Clear Days — Quit Tracker</title>
 <!--
   ═══════════════════ FIREBASE SETUP (one-time, ~5 min) ═══════════════════
@@ -54,6 +59,10 @@
       linear-gradient(180deg, #090d12 0%, #070a0e 100%);
     background-attachment: fixed;
     padding: 14px 14px 44px; max-width: 560px; margin: 0 auto;
+  }
+  /* launched from the home screen: clear the notch / home indicator */
+  @media (display-mode: standalone) {
+    body { padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
   }
   button { font-family: inherit; touch-action: manipulation; }
   .sheet, .stepper, .count-row, .high-chips, .max-edit { touch-action: manipulation; }
@@ -121,6 +130,17 @@
   .auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .btn-link { background: none; border: none; color: var(--muted); font-size: 13px; padding: 12px 0 0; text-decoration: underline; cursor: pointer; width: 100%; }
   .home-emoji { font-size: 46px; margin-bottom: 8px; filter: drop-shadow(0 4px 16px rgba(63,185,80,0.35)); }
+  .home-why { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 4px 0 16px; }
+  .home-why b { color: var(--text); font-weight: 600; }
+  .home-how {
+    background: rgba(255,255,255,0.045); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 16px; font-size: 13.5px; color: #c4ccd4; line-height: 1.9;
+  }
+  .home-how b { color: var(--text); font-weight: 700; }
+  .share-glyph {
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+    border-radius: 6px; background: rgba(88,166,255,0.16); color: #58a6ff; vertical-align: -7px; margin: 0 2px;
+  }
 
   /* ================= MAIN APP ================= */
   .topbar { position: relative; height: 0; z-index: 5; }
@@ -429,8 +449,9 @@
   </div>
   <div class="ob-step" id="obStep3" hidden>
     <div class="home-emoji">📲</div>
-    <h2>Add Clear Days to your home screen</h2>
-    <p class="tagline" id="homeInstructions" style="margin:-6px 0 22px"></p>
+    <h2>Keep it one tap away</h2>
+    <p class="home-why">On your home screen it opens <b>full screen, like a real app</b> — no browser bars, no hunting for a tab. And the habit only sticks if logging takes seconds, so being one tap from the calendar matters more than it sounds.</p>
+    <div class="home-how" id="homeInstructions"></div>
     <button class="btn btn-save" id="btnAddHome">Add to Home Screen</button>
     <button class="btn-link" id="btnSkipHome">Skip for now</button>
   </div>
@@ -1133,11 +1154,20 @@
     if (isStandalone()) { finishOnboarding(); return; }
     showOnboard('home');
   }
+  /* iOS share glyph, drawn inline so it matches the button they're looking for */
+  const SHARE_GLYPH =
+    '<span class="share-glyph"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-label="Share">' +
+    '<path d="M12 3.2v11.3"/><path d="M8.4 6.8 12 3.2l3.6 3.6"/>' +
+    '<path d="M7.6 10.4H5.4a1 1 0 0 0-1 1v8.4a1 1 0 0 0 1 1h13.2a1 1 0 0 0 1-1v-8.4a1 1 0 0 0-1-1h-2.2"/>' +
+    '</svg></span>';
+
   function setupHomeStep() {
-    const p = $('homeInstructions');
+    const how = $('homeInstructions');
     const btn = $('btnAddHome');
     if (deferredInstallPrompt) {
-      p.textContent = 'One tap and it lives right on your home screen, like any other app.';
+      /* Chrome/Edge/Android: the browser lets us do it properly, one tap */
+      how.hidden = true;
       btn.textContent = 'Add to Home Screen';
       btn.onclick = async () => {
         try { deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; } catch (e) {}
@@ -1145,11 +1175,14 @@
         finishOnboarding();
       };
     } else if (isIOS()) {
-      p.innerHTML = 'Tap the Share icon <span style="font-size:16px">⬆️</span> below, then "Add to Home Screen."';
+      /* iOS gives no way to trigger this from a page — Safari's own Share menu is the only route */
+      how.hidden = false;
+      how.innerHTML = 'Tap ' + SHARE_GLYPH + ' in the Safari bar below, then <b>Add to Home Screen</b>.';
       btn.textContent = 'Got it';
       btn.onclick = finishOnboarding;
     } else {
-      p.textContent = 'Open your browser menu and choose "Add to Home screen" or "Install app."';
+      how.hidden = false;
+      how.innerHTML = 'Open your browser menu, then <b>Add to Home screen</b> or <b>Install app</b>.';
       btn.textContent = 'Got it';
       btn.onclick = finishOnboarding;
     }
