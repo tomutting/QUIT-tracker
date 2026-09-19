@@ -88,6 +88,11 @@
   .sell-row { display: flex; gap: 11px; align-items: flex-start; font-size: 14px; color: #c4ccd4; line-height: 1.5; }
   .sell-row .em { font-size: 18px; flex: 0 0 auto; line-height: 1.3; }
   .sell-note { color: #7ee787; font-size: 13px; margin-bottom: 20px; text-shadow: 0 0 12px var(--glow-green); }
+  .demo-month {
+    padding: 13px 11px; margin: 4px 0 16px;
+    background: var(--glass); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--card-shadow);
+  }
 
   /* trial mode: nudge bar shown until an account exists */
   .trial-bar {
@@ -169,6 +174,7 @@
   .topbar { position: relative; height: 0; z-index: 5; }
   .acct-pill {
     position: absolute; right: 0; top: 2px;
+    max-width: min(30vw, 180px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 11px; color: var(--muted); padding: 5px 10px; border-radius: 20px;
     background: var(--glass); border: 1px solid var(--border); cursor: pointer;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -176,7 +182,7 @@
   }
   .acct-pill.synced { color: #7ee787; border-color: rgba(63,185,80,0.3); }
 
-  header { text-align: center; margin-bottom: 16px; }
+  header { text-align: center; margin-bottom: 28px; }
   header h1 {
     font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, #d7ffe0 0%, #3fb950 55%, #1f7a33 100%);
@@ -185,7 +191,7 @@
   }
   header p { color: var(--muted); font-size: 12px; margin-top: 3px; }
 
-  .streaks { display: flex; gap: 10px; margin-bottom: 14px; }
+  .streaks { display: flex; gap: 10px; margin-bottom: 26px; }
   .streak-card {
     flex: 1; padding: 12px 9px; text-align: center; position: relative; overflow: hidden;
     background: var(--glass); border: 1px solid var(--border); border-radius: 18px;
@@ -205,7 +211,7 @@
   .streak-card .lbl { font-size: 10px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.7px; }
 
   .cal-wrap {
-    padding: 13px 11px; margin-bottom: 14px;
+    padding: 13px 11px; margin-bottom: 26px;
     background: var(--glass); border: 1px solid var(--border); border-radius: 18px;
     box-shadow: var(--card-shadow);
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -448,12 +454,24 @@
       <button class="sub-card" data-sub="cigs"><span class="emoji">🚬</span><span><span class="t">Cigarettes</span><br><span class="d">Log cigarettes per day</span></span></button>
       <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log drinks / units per day</span></span></button>
     </div>
+    <button class="btn-link" id="btnGotAccount">Got an account? Sign in</button>
   </div>
   <div class="ob-step" id="obStepWhy" hidden>
     <h2 id="whyTitle"></h2>
     <div class="sell-list" id="whyList"></div>
     <p class="sell-note">Every green day on your calendar is a step there.</p>
     <button class="btn btn-save" id="btnWhyContinue">I'm ready</button>
+  </div>
+  <div class="ob-step" id="obStepHow" hidden>
+    <h2>Ten seconds a day is the whole method</h2>
+    <p class="tagline" style="margin: -6px 0 16px">You can't change what you can't see — logging every day makes your pattern visible.</p>
+    <div class="demo-month">
+      <div class="month-title" id="demoTitle" style="margin-bottom: 7px"></div>
+      <div class="dow" id="demoDow"></div>
+      <div class="mgrid" id="demoGrid"></div>
+    </div>
+    <p class="tagline" style="margin: 0 0 20px">Heavy days in red, clear days in green — everything in between counts.<br>String clear days together and your streak climbs.</p>
+    <button class="btn btn-save" id="btnHowContinue">Continue</button>
   </div>
   <div class="ob-step" id="obStepMax" hidden>
     <h2 id="maxQ"></h2>
@@ -478,8 +496,8 @@
   </div>
   <div class="ob-step" id="obStep3" hidden>
     <div class="home-emoji">📲</div>
-    <h2>Keep it one tap away</h2>
-    <p class="home-why">Opens <b>full screen, like a real app</b> — and logging is one tap, not a tab hunt.</p>
+    <h2>Add Clear Days to your home screen</h2>
+    <p class="home-why">The habit only sticks if logging takes seconds — <b>one tap away</b> beats buried in a browser.</p>
     <div class="home-how" id="homeInstructions"></div>
     <button class="btn btn-save" id="btnAddHome">Add to Home Screen</button>
     <button class="btn-link" id="btnSkipHome">Skip for now</button>
@@ -495,7 +513,7 @@
   </header>
 
   <div class="trial-bar" id="trialBar" hidden>
-    <span><b>Try it:</b> tap a day and log it.</span>
+    <span><b>Try it:</b> tap a day on the calendar and log it</span>
     <button id="btnTrialSkip">Skip for now</button>
   </div>
 
@@ -600,7 +618,7 @@
                      ['✨', 'Brighter mood and clearer skin over the first month.'],
                      ['💷', 'And the money stays in your pocket.']] }
   };
-  const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 60 }, alcohol: { min: 1, max: 30 } };
+  const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 80 }, alcohol: { min: 1, max: 30 } };
 
   /* personal max for the active substance (set during onboarding) */
   const maxCountFor = () => (profile && profile.maxCounts && profile.maxCounts[profile.substance]) || SUB.maxCount;
@@ -1077,6 +1095,12 @@
       .then(() => {
         firebase.initializeApp(FIREBASE_CONFIG);
         db = firebase.firestore();
+      })
+      .catch(e => {
+        /* don't cache a failed load — otherwise one network blip means every retry
+           fails instantly until the page is refreshed */
+        fbReady = null;
+        throw e;
       });
     return fbReady;
   }
@@ -1090,7 +1114,12 @@
     'auth/invalid-credential': 'Wrong email or password.',
     'auth/network-request-failed': 'Network error — are you online?'
   };
-  const authErrMsg = e => AUTH_ERRORS[e.code] || e.message || 'Something went wrong.';
+  const authErrMsg = e => {
+    if (e && e.message && e.message.indexOf('Failed to load') === 0) {
+      return 'Can’t reach the server — check your connection (an ad blocker can also cause this) and try again.';
+    }
+    return AUTH_ERRORS[e.code] || e.message || 'Something went wrong.';
+  };
 
   function schedulePush() {
     if (!user || !db) return;
@@ -1216,6 +1245,8 @@
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
     $('obStepWhy').hidden = step !== 'why';
+    $('obStepHow').hidden = step !== 'how';
+    if (step === 'how') buildDemoMonth();
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
@@ -1306,7 +1337,49 @@
     });
   });
 
-  $('btnWhyContinue').addEventListener('click', () => showOnboard('max'));
+  $('btnWhyContinue').addEventListener('click', () => showOnboard('how'));
+  $('btnHowContinue').addEventListener('click', () => showOnboard('max'));
+
+  /* filled-in demo month: real current month, painted with the exact cell styling the
+     live calendar uses, sweeping heavy red down to a run of clear green days */
+  function buildDemoMonth() {
+    const dow = $('demoDow'), grid = $('demoGrid');
+    dow.innerHTML = ''; grid.innerHTML = '';
+    $('demoTitle').textContent = today.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    ['M','T','W','T','F','S','S'].forEach(l => {
+      const s = document.createElement('span'); s.textContent = l; dow.appendChild(s);
+    });
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    /* early in the month there's not much to show, so illustrate a fuller one */
+    const demoToday = today.getDate() >= 10 ? today.getDate() : 18;
+    for (let b = 0; b < (first.getDay() + 6) % 7; b++) {
+      const blank = document.createElement('div');
+      blank.className = 'cell blank';
+      grid.appendChild(blank);
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.textContent = day;
+      if (day < demoToday) {
+        const sober = day >= demoToday - 3;   /* finish on a clear streak */
+        const t = Math.max(1 - (day - 1) / Math.max(demoToday - 5, 1), 0.08);
+        const c = sober ? SOBER_COLOR : rampColor(t);
+        cell.style.background = 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.28), transparent 55%), ' + c;
+        cell.style.boxShadow = sober
+          ? 'inset 0 0 0 2px rgba(255,255,255,0.8), 0 0 12px rgba(46,219,75,0.65)'
+          : '0 0 9px ' + c.replace('hsl(', 'hsla(').replace('%)', '%,0.45)');
+        cell.style.color = sober ? '#fff' : 'rgba(0,0,0,0.6)';
+        cell.style.textShadow = sober ? '0 1px 2px rgba(0,0,0,0.4)' : '';
+      } else if (day === demoToday) {
+        cell.classList.add('today');
+      } else {
+        cell.classList.add('future');
+      }
+      grid.appendChild(cell);
+    }
+  }
 
   $('obMaxMinus').addEventListener('click', () => {
     if (pendingMax > MAX_LIMITS[pendingSub].min) $('obMaxNum').textContent = --pendingMax;
@@ -1326,6 +1399,7 @@
   });
 
   $('btnTrialSkip').addEventListener('click', () => showOnboard(2));
+  $('btnGotAccount').addEventListener('click', () => showOnboard(2));
 
   /* first log made on a trial profile → let the celebration land, then ask them to save it */
   function maybePromptAccount() {
@@ -1353,16 +1427,20 @@
       user = cred.user;
       /* carry the trial profile's choices over; anything logged during the trial is
          already in localStorage and goes up with the pushAll below */
+      /* sub can be null when a returning user signs in straight from the landing page —
+         pullMerge adopts their saved substance from the server below */
       const sub = (profile && profile.substance) || pendingSub;
       const mc = Object.assign({}, (profile && profile.maxCounts) || {});
-      if (!mc[sub]) mc[sub] = pendingMax;
+      if (sub && !mc[sub]) mc[sub] = pendingMax;
       profile = { substance: sub, email: email, uid: user.uid, maxCounts: mc,
                   createdAt: mode === 'signup' ? new Date().toISOString() : null };
       await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
       saveProfile();
       pushAll();
       track(mode === 'signup' ? 'signup' : 'login');
-      afterAuth();
+      /* home-screen prompt is a first-time thing — returning sign-ins go straight in */
+      if (mode === 'signup') afterAuth();
+      else finishOnboarding();
     } catch (e) {
       msg(authErrMsg(e));
     } finally {
