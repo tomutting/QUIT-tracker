@@ -62,8 +62,8 @@
   </div>
   <div class="card">
     <h2>By source</h2>
-    <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
-    <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer.</p>
+    <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">🌿</th><th class="num">🚬</th><th class="num">🍺</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
+    <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer. The three substance columns show which one that source's visitors picked.</p>
   </div>
   <div class="card">
     <h2>Users &amp; retention</h2>
@@ -108,8 +108,13 @@ async function load() {
     const e = d.data();
     counts[e.t] = (counts[e.t] || 0) + 1;
     const s = e.src || 'direct';
-    bySrc[s] = bySrc[s] || { visit: 0, onboard: 0, signup: 0 };
+    bySrc[s] = bySrc[s] || { visit: 0, onboard: 0, weed: 0, cigs: 0, alcohol: 0, signup: 0 };
     if (e.t === 'visit') bySrc[s].visit++;
+    else if (e.t.indexOf('onboard_') === 0) {
+      bySrc[s].onboard++;
+      const sub = e.t.slice(8);                      /* onboard_weed → weed */
+      if (sub in bySrc[s]) bySrc[s][sub]++;
+    }
     else if (e.t.indexOf('onboard') === 0) bySrc[s].onboard++;
     else if (e.t === 'signup') bySrc[s].signup++;
   });
@@ -123,8 +128,10 @@ async function load() {
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
   const tb = $('srcTable').querySelector('tbody');
   tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
-    '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard + '</td><td class="num">' + bySrc[s].signup + '</td></tr>'
-  ).join('') || '<tr><td colspan="4" class="muted">No events yet</td></tr>';
+    '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard +
+    '</td><td class="num">' + bySrc[s].weed + '</td><td class="num">' + bySrc[s].cigs +
+    '</td><td class="num">' + bySrc[s].alcohol + '</td><td class="num">' + bySrc[s].signup + '</td></tr>'
+  ).join('') || '<tr><td colspan="7" class="muted">No events yet</td></tr>';
 
   /* ---- users & retention from their actual logs ---- */
   const us = await db.collection('users').get();
