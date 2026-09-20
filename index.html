@@ -142,6 +142,25 @@
   .auth-box .sub-note { text-align: center; color: var(--muted); font-size: 13px; margin: -8px 0 20px; }
   .privacy-note { color: var(--muted); font-size: 11.5px; line-height: 1.55; text-align: center; margin-top: 16px; opacity: 0.9; }
   .privacy-note a { color: var(--muted); }
+
+  /* cookie consent — sits above every other layer so it can't be worked around */
+  .consent {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 70;
+    max-width: 480px; margin: 0 auto;
+    background: rgba(11,20,18,0.97); border: 1px solid var(--border-hi); border-radius: 16px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    font-size: 12.5px; color: #c4ccd4; line-height: 1.5; text-align: left;
+  }
+  .consent a { color: var(--muted); }
+  .consent-actions { display: flex; gap: 8px; margin-top: 11px; }
+  .consent-actions button {
+    flex: 1; padding: 9px 0; border-radius: 10px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); font-family: inherit;
+    background: rgba(255,255,255,0.05); color: var(--text);
+  }
+  .consent-actions .yes { background: linear-gradient(180deg, #3fb950 0%, #2a8c3c 100%); border-color: transparent; color: #fff; }
   .field {
     width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 12px;
     border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text);
@@ -566,6 +585,15 @@
   </div>
 </div>
 
+<!-- cookie consent (only shown once a pixel ID is configured) -->
+<div class="consent" id="consentBar" hidden>
+  <div>We'd like to use a Meta advertising cookie to see how well our ads work. Nothing from your log is ever shared. <a href="privacy.html" target="_blank">Privacy policy</a></div>
+  <div class="consent-actions">
+    <button id="btnConsentNo">Decline</button>
+    <button class="yes" id="btnConsentYes">Accept</button>
+  </div>
+</div>
+
 <div class="overlay" id="overlay"></div>
 
 <!-- log sheet -->
@@ -640,8 +668,52 @@
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
+  /* ═══════════════ META PIXEL (consent-gated) ═══════════════
+     Paste the dataset ID from Events Manager below. While it's blank nothing loads
+     and the consent bar stays hidden, so the site behaves exactly as it does today. */
+  const META_PIXEL_ID = '1051638227688147';   /* "Clear Days Web" dataset, Events Manager */
+  const CONSENT_KEY = 'qt_consent';
+
+  const consentState = () => { try { return localStorage.getItem(CONSENT_KEY); } catch (e) { return null; } };
+
+  function loadPixel() {
+    if (!META_PIXEL_ID || window.fbq) return;
+    !function (f, b, e, v, n, t, s) {
+      if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = [];
+      t = b.createElement(e); t.async = !0; t.src = v;
+      s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s);
+    }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', META_PIXEL_ID);
+    fbq('track', 'PageView');
+  }
+
+  /* mirrors our own funnel events into the pixel, so each stage is an optimisation
+     target in Ads Manager: substance picked → InitiateCheckout, signup → CompleteRegistration */
+  function fbTrack(t) {
+    if (!window.fbq) return;
+    if (t === 'signup') fbq('track', 'CompleteRegistration');
+    else if (t === 'first_log') fbq('trackCustom', 'FirstLog');
+    else if (t.indexOf('onboard_') === 0) fbq('track', 'InitiateCheckout', { content_name: t.slice(8) });
+  }
+
+  function setConsent(v) {
+    try { localStorage.setItem(CONSENT_KEY, v); } catch (e) {}
+    $('consentBar').hidden = true;
+    if (v === 'yes') loadPixel();
+  }
+  $('btnConsentYes').addEventListener('click', () => setConsent('yes'));
+  $('btnConsentNo').addEventListener('click', () => setConsent('no'));
+
+  if (META_PIXEL_ID) {
+    const c = consentState();
+    if (c === 'yes') loadPixel();
+    else if (!c) $('consentBar').hidden = false;
+  }
+
   /* ---- lightweight, cookie-free event counts (no SDK needed) ---- */
   function track(t) {
+    fbTrack(t);
     try {
       if (!configured()) return;
       const src = new URLSearchParams(location.search).get('utm_source')
