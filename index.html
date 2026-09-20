@@ -79,10 +79,12 @@
       radial-gradient(ellipse 80% 50% at 50% -10%, rgba(63,185,80,0.135), transparent 60%),
       radial-gradient(ellipse 60% 40% at 100% 100%, rgba(88,101,242,0.08), transparent 60%),
       linear-gradient(180deg, #090d12 0%, #070a0e 100%);
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px 18px;
+    display: flex; justify-content: center;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px));
   }
-  .ob-step { width: 100%; max-width: 400px; text-align: center; }
+  /* auto margins centre the step when it fits and collapse when it doesn't — align-items:center
+     would clip the top of a tall step and make it unreachable by scrolling */
+  .ob-step { width: 100%; max-width: 400px; text-align: center; margin: auto 0; }
   /* value-prop page rows */
   .sell-list { text-align: left; display: flex; flex-direction: column; gap: 13px; margin: 6px 0 18px; }
   .sell-row { display: flex; gap: 11px; align-items: flex-start; font-size: 14px; color: #c4ccd4; line-height: 1.5; }
