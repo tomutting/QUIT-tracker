@@ -93,6 +93,12 @@
     background: var(--glass); border: 1px solid var(--border); border-radius: 18px;
     box-shadow: var(--card-shadow);
   }
+  /* landing screen: smaller cells keep the substance cards near the fold */
+  .demo-month.compact { padding: 11px 10px; margin: 14px 0 12px; }
+  .demo-month.compact .cell { height: 26px; border-radius: 6px; font-size: 9.5px; }
+  .demo-month.compact .mgrid, .demo-month.compact .dow { gap: 4px; }
+  .demo-month.compact .dow span { font-size: 9px; }
+  .demo-month.compact .month-title { font-size: 12px; }
 
   /* trial mode: nudge bar shown until an account exists */
   .trial-bar {
@@ -447,7 +453,12 @@
 <div class="onboard" id="onboard" hidden>
   <div class="ob-step" id="obStep1" hidden>
     <h1>Clear Days</h1>
-    <p class="tagline">Watch your clear days add up.</p>
+    <div class="demo-month compact">
+      <div class="month-title" id="demoTitle" style="margin-bottom: 6px"></div>
+      <div class="dow" id="demoDow"></div>
+      <div class="mgrid" id="demoGrid"></div>
+    </div>
+    <p class="tagline" style="margin: 0 0 20px">Heavy days in red, clear days in green.<br>Log each day in seconds and your pattern shows up fast.</p>
     <h2>What are you quitting?</h2>
     <div class="sub-cards">
       <button class="sub-card" data-sub="weed"><span class="emoji">🌿</span><span><span class="t">Weed</span><br><span class="d">Log each smoke and how high you got</span></span></button>
@@ -462,18 +473,8 @@
     <p class="sell-note">Every green day on your calendar is a step there.</p>
     <button class="btn btn-save" id="btnWhyContinue">I'm ready</button>
   </div>
-  <div class="ob-step" id="obStepHow" hidden>
-    <h2>Ten seconds a day is the whole method</h2>
-    <p class="tagline" style="margin: -6px 0 16px">You can't change what you can't see — logging every day makes your pattern visible.</p>
-    <div class="demo-month">
-      <div class="month-title" id="demoTitle" style="margin-bottom: 7px"></div>
-      <div class="dow" id="demoDow"></div>
-      <div class="mgrid" id="demoGrid"></div>
-    </div>
-    <p class="tagline" style="margin: 0 0 20px">Heavy days in red, clear days in green — everything in between counts.<br>String clear days together and your streak climbs.</p>
-    <button class="btn btn-save" id="btnHowContinue">Continue</button>
-  </div>
   <div class="ob-step" id="obStepMax" hidden>
+    <p class="tagline" style="margin: 0 0 6px">Last thing before you start.</p>
     <h2 id="maxQ"></h2>
     <p class="tagline" style="margin: -6px 0 22px">This sets your personal scale — that amount shows as deepest red.</p>
     <div class="stepper">
@@ -1244,9 +1245,8 @@
   function renderStep(step) {
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
+    if (step === 1) buildDemoMonth();
     $('obStepWhy').hidden = step !== 'why';
-    $('obStepHow').hidden = step !== 'how';
-    if (step === 'how') buildDemoMonth();
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
@@ -1337,8 +1337,7 @@
     });
   });
 
-  $('btnWhyContinue').addEventListener('click', () => showOnboard('how'));
-  $('btnHowContinue').addEventListener('click', () => showOnboard('max'));
+  $('btnWhyContinue').addEventListener('click', () => showOnboard('max'));
 
   /* filled-in demo month: real current month, painted with the exact cell styling the
      live calendar uses, sweeping heavy red down to a run of clear green days */
