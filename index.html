@@ -485,7 +485,7 @@
     <p class="tagline" style="margin: 0 0 20px">Heavy days in red, clear days in green.<br>Log each day in seconds and your pattern shows up fast.</p>
     <h2>What are you quitting?</h2>
     <div class="sub-cards">
-      <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log drinks / units per day</span></span></button>
+      <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log standard drinks per day</span></span></button>
       <button class="sub-card" data-sub="cigs"><span class="emoji">🚬</span><span><span class="t">Cigarettes</span><br><span class="d">Log cigarettes per day</span></span></button>
       <button class="sub-card" data-sub="weed"><span class="emoji">🌿</span><span><span class="t">Weed</span><br><span class="d">Log each smoke and how high you got</span></span></button>
     </div>
@@ -637,21 +637,21 @@
                whyTitle: 'Quitting weed pays you back fast',
                why: [['🌙', 'Real dreams come back within days — sleep runs deeper after the first weeks.'],
                      ['🧠', 'Memory and focus sharpen over the first month.'],
-                     ['💷', 'And the money stays in your pocket.']] },
+                     ['💰','And the money stays in your pocket.']] },
     cigs:    { emoji: '🚬', name: 'Cigarettes', unit: 'cigarette', unitPlural: 'cigarettes', maxCount: 20, hasIntensity: false,
                zeroLabel: 'Smoke-free days', zeroWord: 'smoke-free',
                maxQ: 'On a heavy day, how many cigarettes would you smoke?',
                whyTitle: 'Your body starts repairing itself in 20 minutes',
                why: [['❤️', 'Heart rate and blood pressure start easing within a day.'],
                      ['👃', 'Taste and smell come back within days.'],
-                     ['💷', 'A pack a day is thousands a year back in your pocket.']] },
+                     ['💰','A pack a day is thousands a year back in your pocket.']] },
     alcohol: { emoji: '🍺', name: 'Alcohol',    unit: 'drink',     unitPlural: 'drinks',     maxCount: 10, hasIntensity: false,
                zeroLabel: 'Sober days', zeroWord: 'sober',
                maxQ: 'On a heavy day, how many drinks would you have?',
                whyTitle: 'Drinking less pays you back fast',
                why: [['😴', 'Deeper sleep and steadier energy within a couple of weeks.'],
                      ['✨', 'Brighter mood and clearer skin over the first month.'],
-                     ['💷', 'And the money stays in your pocket.']] }
+                     ['💰','And the money stays in your pocket.']] }
   };
   const MAX_LIMITS = { weed: { min: 1, max: 12 }, cigs: { min: 1, max: 80 }, alcohol: { min: 1, max: 30 } };
 
@@ -675,6 +675,16 @@
   const CONSENT_KEY = 'qt_consent';
 
   const consentState = () => { try { return localStorage.getItem(CONSENT_KEY); } catch (e) { return null; } };
+
+  /* consent is only legally required for UK/EU visitors, and the banner costs conversions,
+     so it's shown to them only. timezone is a dependency-free proxy for location — it can't
+     be spoofed away by a VPN that doesn't also change the clock, and errs toward asking. */
+  function needsConsent() {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      return /^(Europe\/|Atlantic\/(Canary|Faroe|Madeira|Azores|Reykjavik)|Arctic\/)/.test(tz);
+    } catch (e) { return true; }
+  }
 
   function loadPixel() {
     if (!META_PIXEL_ID || window.fbq) return;
@@ -708,7 +718,9 @@
   if (META_PIXEL_ID) {
     const c = consentState();
     if (c === 'yes') loadPixel();
-    else if (!c) $('consentBar').hidden = false;
+    else if (c === 'no') { /* they declined: respect it */ }
+    else if (needsConsent()) $('consentBar').hidden = false;
+    else loadPixel();                                  /* outside the UK/EU: no banner */
   }
 
   /* ---- lightweight, cookie-free event counts (no SDK needed) ---- */
