@@ -93,10 +93,11 @@
     background: var(--glass); border: 1px solid var(--border); border-radius: 18px;
     box-shadow: var(--card-shadow);
   }
-  /* landing screen: smaller cells keep the substance cards near the fold */
-  .demo-month.compact { padding: 11px 10px; margin: 14px 0 12px; }
-  .demo-month.compact .cell { height: 26px; border-radius: 6px; font-size: 9.5px; }
-  .demo-month.compact .mgrid, .demo-month.compact .dow { gap: 4px; }
+  /* landing screen: scaled-down copy of the real calendar. aspect-ratio drives the cell
+     height off its column width, so the shape matches the app at any box width */
+  .demo-month.compact { padding: 11px 10px; margin: 14px auto 12px; max-width: 300px; }
+  .demo-month.compact .cell { height: auto; aspect-ratio: 1.1 / 1; border-radius: 8px; font-size: 9.5px; }
+  .demo-month.compact .mgrid, .demo-month.compact .dow { gap: 5px; }
   .demo-month.compact .dow span { font-size: 9px; }
   .demo-month.compact .month-title { font-size: 12px; }
 
@@ -137,6 +138,8 @@
   .auth-box { text-align: left; }
   .auth-box h2 { text-align: center; }
   .auth-box .sub-note { text-align: center; color: var(--muted); font-size: 13px; margin: -8px 0 20px; }
+  .privacy-note { color: var(--muted); font-size: 11.5px; line-height: 1.55; text-align: center; margin-top: 16px; opacity: 0.9; }
+  .privacy-note a { color: var(--muted); }
   .field {
     width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 12px;
     border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text);
@@ -486,7 +489,7 @@
   </div>
   <div class="ob-step auth-box" id="obStep2" hidden>
     <h2 id="authTitle">Create your account</h2>
-    <p class="sub-note" id="authNote">Your log is saved to your account and synced across devices.</p>
+    <p class="sub-note" id="authNote">Create an account to save your days and keep your streak counting.</p>
     <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
     <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
     <div class="auth-msg" id="authMsg"></div>
@@ -494,6 +497,7 @@
       <button class="btn btn-save" id="btnSignup">Create account</button>
       <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
     </div>
+    <p class="privacy-note">Private by default. No marketing emails, ever — your log is never sold or shared, and only you can read it. <a href="privacy.html" target="_blank">Privacy policy</a></p>
   </div>
   <div class="ob-step" id="obStep3" hidden>
     <div class="home-emoji">📲</div>
@@ -1256,8 +1260,8 @@
       const saving = profile && profile.pending && Object.keys(data).length > 0;
       $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
       $('authNote').textContent = saving
-        ? 'Your log is only on this device. An account keeps it safe and syncs it everywhere.'
-        : 'Your log is saved to your account and synced across devices.';
+        ? 'Create an account so your days are saved and your streak keeps counting.'
+        : 'Create an account to save your days and keep your streak counting.';
       if (!configured()) msg('Server not set up yet — see the setup note inside this file.');
     }
     if (step === 'home') setupHomeStep();
