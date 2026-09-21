@@ -740,6 +740,10 @@
       }).catch(() => {});
     } catch (e) {}
   }
+  /* onboarding step markers: once per page session, so back/forward can't inflate them */
+  const _steps = {};
+  function trackStep(t) { if (_steps[t]) return; _steps[t] = 1; track(t); }
+
   /* one visit event per browser session */
   try {
     if (!sessionStorage.getItem('qt_v')) { sessionStorage.setItem('qt_v', '1'); track('visit'); }
@@ -1426,8 +1430,8 @@
     });
   });
 
-  $('btnWhyContinue').addEventListener('click', () => showOnboard('how'));
-  $('btnHowContinue').addEventListener('click', () => showOnboard('max'));
+  $('btnWhyContinue').addEventListener('click', () => { trackStep('step_how'); showOnboard('how'); });
+  $('btnHowContinue').addEventListener('click', () => { trackStep('step_max'); showOnboard('max'); });
 
   /* filled-in demo month: real current month, painted with the exact cell styling the
      live calendar uses, sweeping heavy red down to a run of clear green days */
@@ -1479,6 +1483,7 @@
   /* into the real calendar on a trial profile — the account ask comes after their
      first logged day (or straight away via the skip on the trial bar) */
   $('btnMaxContinue').addEventListener('click', () => {
+    trackStep('step_app');
     profile = { substance: pendingSub, maxCounts: {}, pending: true };
     profile.maxCounts[pendingSub] = pendingMax;
     saveProfile();
@@ -1487,7 +1492,9 @@
     try { history.pushState({ ob: 'cal' }, ''); } catch (e) {}
   });
 
-  $('btnTrialSkip').addEventListener('click', () => showOnboard(2));
+  /* two routes to the account screen — tracked separately so we can tell whether the
+     people who bail there had logged a day first or skipped straight past it */
+  $('btnTrialSkip').addEventListener('click', () => { trackStep('step_account_skip'); showOnboard(2); });
   $('btnGotAccount').addEventListener('click', () => showOnboard(2));
 
   /* first log made on a trial profile → let the celebration land, then ask them to save it */
@@ -1495,6 +1502,7 @@
     if (!profile || !profile.pending) return;
     setTimeout(() => {
       if (!profile || !profile.pending) return;
+      trackStep('step_account_log');
       showOnboard(2);
     }, 2200);
   }

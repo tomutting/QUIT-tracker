@@ -61,6 +61,12 @@
     <div class="grid" id="funnel"></div>
   </div>
   <div class="card">
+    <h2>Onboarding drop-off</h2>
+    <table id="dropTable"><thead><tr><th>Step</th><th class="num">Reached</th><th class="num">Kept</th><th class="num">Lost</th></tr></thead><tbody></tbody></table>
+    <p class="muted" style="margin-top:8px">"Kept" is the share of the previous step that got this far. The worst step is highlighted — that's where to look first.</p>
+    <p class="muted" id="accountSplit" style="margin-top:4px"></p>
+  </div>
+  <div class="card">
     <h2>By source</h2>
     <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">🌿</th><th class="num">🚬</th><th class="num">🍺</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer. The three substance columns show which one that source's visitors picked.</p>
@@ -126,6 +132,38 @@ async function load() {
     stat(counts.first_log || 0, 'first logs') +
     stat(counts.login || 0, 'logins') +
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
+  /* ---- onboarding drop-off ---- */
+  const reachedAccount = (counts.step_account_log || 0) + (counts.step_account_skip || 0);
+  const FUNNEL = [
+    ['Landed on the site',      counts.visit || 0],
+    ['Picked a substance',      onboards],
+    ['Past "why quit"',         counts.step_how || 0],
+    ['Past "how it works"',     counts.step_max || 0],
+    ['Set max, into the app',   counts.step_app || 0],
+    ['Reached account screen',  reachedAccount],
+    ['Created an account',      counts.signup || 0]
+  ];
+  let worst = -1, worstRate = 2;
+  FUNNEL.forEach((row, i) => {
+    if (i === 0) return;
+    const prev = FUNNEL[i - 1][1];
+    if (prev > 0) { const r = row[1] / prev; if (r < worstRate) { worstRate = r; worst = i; } }
+  });
+  $('dropTable').querySelector('tbody').innerHTML = FUNNEL.map((row, i) => {
+    if (i === 0) return '<tr><td>' + row[0] + '</td><td class="num">' + row[1] + '</td><td class="num">—</td><td class="num">—</td></tr>';
+    const prev = FUNNEL[i - 1][1];
+    const kept = prev ? Math.round(100 * row[1] / prev) + '%' : '—';
+    const lost = prev ? (prev - row[1]) : '—';
+    const hi = i === worst ? ' style="color:#f85149;font-weight:700"' : '';
+    return '<tr><td' + hi + '>' + row[0] + '</td><td class="num">' + row[1] +
+           '</td><td class="num"' + hi + '>' + kept + '</td><td class="num">' + lost + '</td></tr>';
+  }).join('');
+
+  $('accountSplit').textContent = reachedAccount
+    ? 'Of those who reached it: ' + (counts.step_account_log || 0) + ' logged a day first, ' +
+      (counts.step_account_skip || 0) + ' skipped straight to it.'
+    : '';
+
   const tb = $('srcTable').querySelector('tbody');
   tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
     '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard +
