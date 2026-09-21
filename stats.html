@@ -64,6 +64,7 @@
     <h2>Onboarding drop-off</h2>
     <table id="dropTable"><thead><tr><th>Step</th><th class="num">Reached</th><th class="num">Kept</th><th class="num">Lost</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Kept" is the share of the previous step that got this far. The worst step is highlighted — that's where to look first.</p>
+    <p class="muted" id="dropWindow" style="margin-top:4px"></p>
     <p class="muted" id="accountSplit" style="margin-top:4px"></p>
   </div>
   <div class="card">
@@ -90,6 +91,18 @@ firebase.initializeApp({
 });
 const db = firebase.firestore();
 const $ = id => document.getElementById(id);
+
+/* Onboarding drop-off counts only traffic from this moment onwards, so older visits
+   that predate step tracking don't fake a huge drop. Set it to roughly when you
+   deployed the step tracking, e.g. '2026-09-21T15:00:00Z'. Leave blank and it falls
+   back to the first step event ever seen — close, but it quietly drops the people who
+   landed and bounced before anyone got deep enough to fire one. */
+const DROPOFF_SINCE = '';
+
+/* Drop-off counts Meta ad traffic only — direct visits, your own testing and organic
+   referrals are excluded so the funnel reflects what the ads actually deliver.
+   Matches the source recorded on each event (utm_source, else the referrer host). */
+const META_SRC = /meta|facebook|instagram|\bfb\b/i;
 
 $('btnGo').addEventListener('click', async () => {
   $('msg').textContent = 'Signing in…';
@@ -132,16 +145,34 @@ async function load() {
     stat(counts.first_log || 0, 'first logs') +
     stat(counts.login || 0, 'logins') +
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
-  /* ---- onboarding drop-off ---- */
-  const reachedAccount = (counts.step_account_log || 0) + (counts.step_account_skip || 0);
+  /* ---- onboarding drop-off ----
+     counts only traffic from the moment step tracking went live, otherwise every older
+     visit lands in the funnel with no intermediate steps and fakes a huge drop. the
+     cutoff is the earliest step_ event we ever received, so it needs no maintenance. */
+  const isMeta = e => META_SRC.test(e.src || '');
+  let stepStart = DROPOFF_SINCE || null;
+  if (!stepStart) ev.forEach(d => {
+    const e = d.data();
+    if (e.t && e.t.indexOf('step_') === 0 && e.ts && (!stepStart || e.ts < stepStart)) stepStart = e.ts;
+  });
+  const recent = {};
+  const metaSources = {};
+  if (stepStart) ev.forEach(d => {
+    const e = d.data();
+    if (!e.ts || e.ts < stepStart || !isMeta(e)) return;
+    recent[e.t] = (recent[e.t] || 0) + 1;
+    metaSources[e.src] = 1;
+  });
+  const recentOnboards = Object.keys(recent).filter(k => k.indexOf('onboard') === 0).reduce((a, k) => a + recent[k], 0);
+  const reachedAccount = (recent.step_account_log || 0) + (recent.step_account_skip || 0);
   const FUNNEL = [
-    ['Landed on the site',      counts.visit || 0],
-    ['Picked a substance',      onboards],
-    ['Past "why quit"',         counts.step_how || 0],
-    ['Past "how it works"',     counts.step_max || 0],
-    ['Set max, into the app',   counts.step_app || 0],
+    ['Landed on the site',      recent.visit || 0],
+    ['Picked a substance',      recentOnboards],
+    ['Past "why quit"',         recent.step_how || 0],
+    ['Past "how it works"',     recent.step_max || 0],
+    ['Set max, into the app',   recent.step_app || 0],
     ['Reached account screen',  reachedAccount],
-    ['Created an account',      counts.signup || 0]
+    ['Created an account',      recent.signup || 0]
   ];
   let worst = -1, worstRate = 2;
   FUNNEL.forEach((row, i) => {
@@ -159,6 +190,11 @@ async function load() {
            '</td><td class="num"' + hi + '>' + kept + '</td><td class="num">' + lost + '</td></tr>';
   }).join('');
 
+  const srcList = Object.keys(metaSources).sort().join(', ');
+  $('dropWindow').textContent = stepStart
+    ? 'Meta ad traffic only' + (srcList ? ' (' + srcList + ')' : '') + ', from ' +
+      new Date(stepStart).toLocaleString() + '. Direct, organic and test traffic excluded.'
+    : 'No step-tracked traffic yet — this fills in once the new tracking is deployed and someone visits.';
   $('accountSplit').textContent = reachedAccount
     ? 'Of those who reached it: ' + (counts.step_account_log || 0) + ' logged a day first, ' +
       (counts.step_account_skip || 0) + ' skipped straight to it.'

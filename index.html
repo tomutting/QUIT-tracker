@@ -729,7 +729,11 @@
     fbTrack(t);
     try {
       if (!configured()) return;
-      const src = new URLSearchParams(location.search).get('utm_source')
+      /* fbclid with no utm and no referrer is Meta's in-app browser — without this it
+         would record as "direct" and vanish from the ad funnel */
+      const q = new URLSearchParams(location.search);
+      const src = q.get('utm_source')
+        || (q.has('fbclid') ? 'meta-fbclid' : null)
         || (document.referrer ? new URL(document.referrer).hostname : 'direct');
       fetch('https://firestore.googleapis.com/v1/projects/' + FIREBASE_CONFIG.projectId +
             '/databases/(default)/documents/events?key=' + FIREBASE_CONFIG.apiKey, {
