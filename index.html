@@ -619,6 +619,20 @@
 (function () {
   'use strict';
 
+  /* ?reset=1 wipes local state and starts onboarding from scratch, for walking the funnel
+     again on a browser that already has a profile (Meta's Test events tool, say). Cloud
+     data is untouched — signing back in restores everything. */
+  try {
+    if (new URLSearchParams(location.search).has('reset')) {
+      localStorage.clear();
+      sessionStorage.clear();
+      const u = new URL(location.href);
+      u.searchParams.delete('reset');
+      location.replace(u.toString());
+      return;
+    }
+  } catch (e) {}
+
   /* ═══════ PASTE YOUR FIREBASE CONFIG HERE (see comment at top of file) ═══════ */
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyChbXL7kaHEiMqQZCi2uB9obNu-qly_rDA",
