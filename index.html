@@ -702,6 +702,9 @@
     if (!window.fbq) return;
     if (t === 'signup') fbq('track', 'CompleteRegistration');
     else if (t === 'first_log') fbq('trackCustom', 'FirstLog');
+    /* reached the real calendar — several screens deeper than a card tap, and the
+       deepest event with enough volume for Meta to optimise against */
+    else if (t === 'step_app') fbq('track', 'StartTrial');
     else if (t.indexOf('onboard_') === 0) fbq('track', 'InitiateCheckout', { content_name: t.slice(8) });
   }
 
