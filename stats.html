@@ -42,6 +42,13 @@
   .msg { min-height:18px; font-size:12.5px; color:#f85149; margin:6px 0; text-align:center; }
   .muted { color:var(--muted); font-size:12px; }
   #dash { display:none; }
+  .refresh-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .refresh-row .muted { margin-right:auto; }
+  .btn-refresh {
+    font-size:12.5px; font-weight:600; color:var(--text); cursor:pointer; font-family:inherit;
+    background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; padding:7px 14px;
+  }
+  .btn-refresh:disabled { opacity:0.5; cursor:default; }
 </style>
 </head>
 <body>
@@ -56,6 +63,10 @@
 </div>
 
 <div id="dash">
+  <div class="refresh-row">
+    <span class="muted" id="lastLoaded"></span>
+    <button class="btn-refresh" id="btnRefresh">Refresh</button>
+  </div>
   <div class="card">
     <h2>Funnel (all time)</h2>
     <div class="grid" id="funnel"></div>
@@ -123,9 +134,19 @@ $('btnGo').addEventListener('click', async () => {
   }
 });
 
+$('btnRefresh').addEventListener('click', async () => {
+  const b = $('btnRefresh');
+  b.disabled = true;
+  b.textContent = 'Refreshing…';
+  try { await load(); }
+  catch (e) { $('lastLoaded').textContent = 'Refresh failed — ' + (e.message || 'try again'); }
+  finally { b.disabled = false; b.textContent = 'Refresh'; }
+});
+
 function stat(v, k) { return '<div class="stat"><div class="v">' + v + '</div><div class="k">' + k + '</div></div>'; }
 
 async function load() {
+  $('lastLoaded').textContent = 'Updated ' + new Date().toLocaleTimeString();
   /* ---- events funnel ---- */
   const ev = await db.collection('events').get();
   const counts = {}, bySrc = {};
