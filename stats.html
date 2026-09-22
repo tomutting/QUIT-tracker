@@ -49,6 +49,9 @@
     background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:10px; padding:7px 14px;
   }
   .btn-refresh:disabled { opacity:0.5; cursor:default; }
+  .card-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .card-head h2 { margin-bottom:0; }
+  .btn-refresh.sm { margin-left:auto; flex:0 0 auto; padding:4px 10px; font-size:11px; font-weight:500; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -68,11 +71,11 @@
     <button class="btn-refresh" id="btnRefresh">Refresh</button>
   </div>
   <div class="card">
-    <h2>Funnel (all time)</h2>
+    <div class="card-head"><h2>Funnel (all time)</h2><button class="btn-refresh sm" data-refresh="all">Refresh</button></div>
     <div class="grid" id="funnel"></div>
   </div>
   <div class="card">
-    <h2>Onboarding drop-off</h2>
+    <div class="card-head"><h2>Onboarding drop-off</h2><button class="btn-refresh sm" data-refresh="recent">Refresh</button></div>
     <table id="dropTable"><thead><tr><th>Step</th><th class="num">Reached</th><th class="num">Kept</th><th class="num">Lost</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Kept" is the share of the previous step that got this far. The worst step is highlighted — that's where to look first.</p>
     <p id="logMetric" style="margin-top:12px;font-size:13.5px;color:var(--accent)"></p>
@@ -80,17 +83,17 @@
     <p class="muted" id="accountSplit" style="margin-top:4px"></p>
   </div>
   <div class="card">
-    <h2>By time of day <span style="text-transform:none;letter-spacing:0;opacity:0.7">(visitor's local clock)</span></h2>
+    <div class="card-head"><h2>By time of day <span style="text-transform:none;letter-spacing:0;opacity:0.7">(visitor's local clock)</span></h2><button class="btn-refresh sm" data-refresh="recent">Refresh</button></div>
     <table id="hourTable"><thead><tr><th>When they arrived</th><th class="num">Visits</th><th class="num">Into app</th><th class="num">First logs</th><th class="num">Logged</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Logged" is the share of those who reached the calendar who actually logged a day. If evenings are far higher, the day being unfinished is what's stopping people — and dayparting the ads would fix it.</p>
   </div>
   <div class="card">
-    <h2>By source</h2>
+    <div class="card-head"><h2>By source</h2><button class="btn-refresh sm" data-refresh="all">Refresh</button></div>
     <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">🌿</th><th class="num">🚬</th><th class="num">🍺</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer. The three substance columns show which one that source's visitors picked.</p>
   </div>
   <div class="card">
-    <h2>Users &amp; retention</h2>
+    <div class="card-head"><h2>Users &amp; retention</h2><button class="btn-refresh sm" data-refresh="users">Refresh</button></div>
     <div class="grid" id="userStats" style="margin-bottom:14px"></div>
     <table id="cohortTable"><thead><tr><th>Cohort (signup month)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">2d+</th><th class="num">3d+</th><th class="num">4d+</th><th class="num">5d+</th><th class="num">6d+</th><th class="num">7d+</th><th class="num">14d+</th><th class="num">21d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Back after Nd+" = logged at least one day N or more days after their first log. Accounts only — local-only users aren't visible.</p>
@@ -134,24 +137,75 @@ $('btnGo').addEventListener('click', async () => {
   }
 });
 
-$('btnRefresh').addEventListener('click', async () => {
-  const b = $('btnRefresh');
-  b.disabled = true;
-  b.textContent = 'Refreshing…';
-  try { await load(); }
-  catch (e) { $('lastLoaded').textContent = 'Refresh failed — ' + (e.message || 'try again'); }
-  finally { b.disabled = false; b.textContent = 'Refresh'; }
-});
+$('btnRefresh').addEventListener('click', () => runRefresh($('btnRefresh'), 'everything'));
+
+/* Per-section refresh. Each button re-reads only the source its section depends on:
+     all    → every event (needed for all-time totals; the expensive one)
+     recent → only events since the cutoff (a fraction of the reads)
+     users  → the accounts collection, no events touched
+   Funnel and By source share one query, as do drop-off and time of day, so refreshing
+   either of a pair updates both — no point re-reading the same documents twice. */
+async function runRefresh(btn, scope) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+  try {
+    if (scope === 'all')          { await fetchAll();    renderAllTime(); renderRecent(); }
+    else if (scope === 'recent')  { await fetchRecent(); renderRecent(); }
+    else if (scope === 'users')   { await fetchUsers();  renderUsers(); }
+    else                          { await load(); }
+    stamp();
+  } catch (e) {
+    $('lastLoaded').textContent = 'Refresh failed — ' + (e.message || 'try again');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+document.querySelectorAll('[data-refresh]').forEach(b =>
+  b.addEventListener('click', () => runRefresh(b, b.dataset.refresh)));
 
 function stat(v, k) { return '<div class="stat"><div class="v">' + v + '</div><div class="k">' + k + '</div></div>'; }
 
+/* Reads are the expensive thing here — the events collection is read in full for the
+   all-time numbers, which is what drove usage up. So it's cached and split:
+     "all"    every event ever (funnel + by source need all-time totals)
+     "recent" only events since the drop-off cutoff (a fraction of the reads)
+     "users"  the accounts collection, untouched by any events refresh
+   Refreshing a section only re-reads the source that section actually depends on. */
+let evAll = null, evRecent = null, usersSnap = null;
+
+async function fetchAll() {
+  evAll = (await db.collection('events').get()).docs.map(d => d.data());
+  evRecent = sinceCutoff(evAll);                     /* free — no extra read */
+}
+async function fetchRecent() {
+  const since = DROPOFF_SINCE || null;
+  evRecent = since
+    ? (await db.collection('events').where('ts', '>=', since).get()).docs.map(d => d.data())
+    : (evAll ? sinceCutoff(evAll) : (await db.collection('events').get()).docs.map(d => d.data()));
+}
+async function fetchUsers() { usersSnap = (await db.collection('users').get()).docs.map(d => d.data()); }
+
+function sinceCutoff(list) {
+  if (!DROPOFF_SINCE) return list.slice();
+  return list.filter(e => e.ts && e.ts >= DROPOFF_SINCE);
+}
+
+function stamp() { $('lastLoaded').textContent = 'Updated ' + new Date().toLocaleTimeString(); }
+
 async function load() {
-  $('lastLoaded').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  /* ---- events funnel ---- */
-  const ev = await db.collection('events').get();
+  await Promise.all([fetchAll(), fetchUsers()]);
+  renderAllTime(); renderRecent(); renderUsers();
+  stamp();
+}
+
+/* ---- funnel + by source: all-time ---- */
+function renderAllTime() {
+  const ev = evAll || [];
   const counts = {}, bySrc = {};
-  ev.forEach(d => {
-    const e = d.data();
+  ev.forEach(e => {
     counts[e.t] = (counts[e.t] || 0) + 1;
     const s = e.src || 'direct';
     bySrc[s] = bySrc[s] || { visit: 0, onboard: 0, weed: 0, cigs: 0, alcohol: 0, signup: 0 };
@@ -175,20 +229,27 @@ async function load() {
        so these would vanish entirely under the Meta-only filter */
     stat(counts.home_added || 0, 'added to home screen') +
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
-  /* ---- onboarding drop-off ----
-     counts only traffic from the moment step tracking went live, otherwise every older
-     visit lands in the funnel with no intermediate steps and fakes a huge drop. the
-     cutoff is the earliest step_ event we ever received, so it needs no maintenance. */
+  const tb = $('srcTable').querySelector('tbody');
+  tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
+    '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard +
+    '</td><td class="num">' + bySrc[s].weed + '</td><td class="num">' + bySrc[s].cigs +
+    '</td><td class="num">' + bySrc[s].alcohol + '</td><td class="num">' + bySrc[s].signup + '</td></tr>'
+  ).join('') || '<tr><td colspan="7" class="muted">No events yet</td></tr>';
+}
+
+/* ---- drop-off + time of day: only events since the cutoff ----
+   counts only traffic from the moment step tracking went live, otherwise every older
+   visit lands in the funnel with no intermediate steps and fakes a huge drop. */
+function renderRecent() {
+  const ev = evRecent || [];
   const isMeta = e => META_SRC.test(e.src || '');
   let stepStart = DROPOFF_SINCE || null;
-  if (!stepStart) ev.forEach(d => {
-    const e = d.data();
+  if (!stepStart) ev.forEach(e => {
     if (e.t && e.t.indexOf('step_') === 0 && e.ts && (!stepStart || e.ts < stepStart)) stepStart = e.ts;
   });
   const recent = {};
   const metaSources = {};
-  if (stepStart) ev.forEach(d => {
-    const e = d.data();
+  if (stepStart) ev.forEach(e => {
     if (!e.ts || e.ts < stepStart || !isMeta(e)) return;
     recent[e.t] = (recent[e.t] || 0) + 1;
     metaSources[e.src] = 1;
@@ -248,8 +309,7 @@ async function load() {
   ];
   const byHour = BUCKETS.map(() => ({ visit: 0, app: 0, log: 0 }));
   let anyHourData = false;
-  ev.forEach(d => {
-    const e = d.data();
+  ev.forEach(e => {
     const h = typeof e.h === 'number' ? e.h : (e.h != null ? parseInt(e.h, 10) : null);
     if (h == null || isNaN(h)) return;
     anyHourData = true;
@@ -268,19 +328,16 @@ async function load() {
       }).join('')
     : '<tr><td colspan="5" class="muted">No data yet — local hour is only recorded on events from the new build onwards.</td></tr>';
 
-  const tb = $('srcTable').querySelector('tbody');
-  tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
-    '<tr><td>' + s + '</td><td class="num">' + bySrc[s].visit + '</td><td class="num">' + bySrc[s].onboard +
-    '</td><td class="num">' + bySrc[s].weed + '</td><td class="num">' + bySrc[s].cigs +
-    '</td><td class="num">' + bySrc[s].alcohol + '</td><td class="num">' + bySrc[s].signup + '</td></tr>'
-  ).join('') || '<tr><td colspan="7" class="muted">No events yet</td></tr>';
 
-  /* ---- users & retention from their actual logs ---- */
-  const us = await db.collection('users').get();
+
+}
+
+/* ---- users & retention: the accounts collection only ---- */
+function renderUsers() {
+  const us = usersSnap || [];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const users = [];
-  us.forEach(d => {
-    const u = d.data();
+  us.forEach(u => {
     const days = new Set();
     const logs = u.logs || {};
     for (const sub in logs) for (const k in logs[sub]) days.add(k);
