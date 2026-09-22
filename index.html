@@ -755,6 +755,19 @@
     if (!sessionStorage.getItem('qt_v')) { sessionStorage.setItem('qt_v', '1'); track('visit'); }
   } catch (e) { track('visit'); }
 
+  /* home screen installs, once per device. Chrome fires appinstalled; iOS fires nothing,
+     so we detect it the first time the app is launched from the icon instead — which is
+     arguably the better signal anyway, since adding it and never opening it is worthless */
+  function trackHomeAdded() {
+    try {
+      if (localStorage.getItem('qt_home_added')) return;
+      localStorage.setItem('qt_home_added', '1');
+    } catch (e) { return; }
+    track('home_added');
+  }
+  window.addEventListener('appinstalled', trackHomeAdded);
+  if (isStandalone()) trackHomeAdded();
+
   /* ---- state ---- */
   let profile = null;
   try { profile = JSON.parse(localStorage.getItem('qt_profile')) || null; } catch (e) {}
@@ -1390,6 +1403,7 @@
     '</svg></span>';
 
   function setupHomeStep() {
+    trackStep('home_shown');
     const how = $('homeInstructions');
     const btn = $('btnAddHome');
     if (deferredInstallPrompt) {
