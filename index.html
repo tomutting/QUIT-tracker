@@ -335,6 +335,27 @@
   .sheet.auth { min-height: 48vh; padding-top: 26px; }
   .sheet.auth::before { content: none; }
   .auth-note { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 2px 0 16px; }
+  .prompt-how {
+    background: rgba(255,255,255,0.045); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 18px; font-size: 13.5px; color: #c4ccd4; line-height: 1.85;
+  }
+  .prompt-how b { color: var(--text); font-weight: 700; }
+  .share-glyph {
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+    border-radius: 6px; background: rgba(88,166,255,0.16); color: #58a6ff; vertical-align: -7px; margin: 0 2px;
+  }
+  /* soft nudge on the landing screen — never blocks, in-app browsers only */
+  .find-banner {
+    display: flex; align-items: flex-start; gap: 8px; text-align: left;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 10px 9px 12px; margin-bottom: 16px;
+    font-size: 12px; color: #c4ccd4; line-height: 1.45;
+  }
+  .find-banner b { color: var(--text); font-weight: 700; }
+  .find-banner button {
+    margin-left: auto; flex: 0 0 auto; background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 17px; line-height: 1; padding: 0 2px; font-family: inherit;
+  }
   .sheet::before {
     content: ''; display: block; width: 38px; height: 4px; border-radius: 2px;
     background: rgba(255,255,255,0.18); margin: 0 auto 14px;
@@ -466,6 +487,10 @@
 <!-- ============ ONBOARDING ============ -->
 <div class="onboard" id="onboard" hidden>
   <div class="ob-step" id="obStep1" hidden>
+    <div class="find-banner" id="findBanner" hidden>
+      <span><b>Find it again later:</b> tap <b>•••</b> and choose Open in browser.</span>
+      <button id="btnBannerClose" aria-label="Dismiss">&times;</button>
+    </div>
     <h1>Clear Days</h1>
     <p class="tagline" style="margin: 6px 0 0">Your progress, in full colour.</p>
     <div class="demo-month">
@@ -564,16 +589,26 @@
 <!-- account creation: a sheet over whatever they were doing, so the app stays visible behind -->
 <div class="overlay hi" id="authOverlay"></div>
 <div class="sheet hi auth" id="authSheet">
-  <h3 id="authTitle">Save your progress</h3>
-  <div class="auth-note" id="authNote">Create an account to save your days and keep your streak counting.</div>
-  <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-  <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
-  <div class="auth-msg" id="authMsg"></div>
-  <div class="auth-actions">
-    <button class="btn btn-save" id="btnSignup">Create account</button>
-    <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
+  <div id="authForm">
+    <h3 id="authTitle">Save your progress</h3>
+    <div class="auth-note" id="authNote">Create an account to save your days and keep your streak counting.</div>
+    <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
+    <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
+    <div class="auth-msg" id="authMsg"></div>
+    <div class="auth-actions">
+      <button class="btn btn-save" id="btnSignup">Create account</button>
+      <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
+    </div>
+    <p class="privacy-note">Private by default. No marketing emails, ever — your log is never sold or shared, and only you can read it. <a href="privacy.html" target="_blank">Privacy policy</a></p>
   </div>
-  <p class="privacy-note">Private by default. No marketing emails, ever — your log is never sold or shared, and only you can read it. <a href="privacy.html" target="_blank">Privacy policy</a></p>
+  <!-- same sheet, second beat: swaps in once the account exists -->
+  <div id="authPrompt" hidden>
+    <h3 id="promptTitle"></h3>
+    <div class="auth-note" id="promptNote"></div>
+    <div class="prompt-how" id="promptHow"></div>
+    <button class="btn btn-save" id="btnPromptDone">Got it</button>
+    <button class="btn-link" id="btnPromptSkip">Skip for now</button>
+  </div>
 </div>
 
 <div class="overlay" id="overlay"></div>
@@ -649,6 +684,10 @@
   /* we no longer prompt for this ourselves, so beforeinstallprompt is left alone — Chrome
      can offer its own install banner when it judges the moment right */
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  /* Facebook/Instagram etc. open links in their own webview — a dead end for both
+     bookmarking and Add to Home Screen, so those people get told how to get out of it */
+  const isEmbeddedBrowser = () => /FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TikTok|Snapchat/i.test(navigator.userAgent);
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
   /* ═══════════════ META PIXEL (consent-gated) ═══════════════
      Paste the dataset ID from Events Manager below. While it's blank nothing loads
@@ -1233,13 +1272,25 @@
     clearTimeout(pushTimer);
     pushTimer = setTimeout(pushAll, 1200);
   }
+  /* where they are, so a nightly reminder can land in their evening rather than ours.
+     offset is minutes behind UTC (JS convention), kept as a fallback for when the IANA
+     name is missing or unrecognised by the mailer */
+  function localZone() {
+    let tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    return { tz: tz, tzOffset: new Date().getTimezoneOffset() };
+  }
+
   function pushAll() {
     if (!user || !db) return;
+    const z = localZone();
     db.collection('users').doc(user.uid).set({
       substance: profile.substance,
       email: profile.email || '',
       maxCounts: profile.maxCounts || {},
       createdAt: profile.createdAt || null,
+      tz: z.tz,
+      tzOffset: z.tzOffset,
       logs: allLogs(),
       updatedAt: new Date().toISOString()
     }).then(() => setPill('synced')).catch(() => setPill('error'));
@@ -1360,6 +1411,9 @@
     setAuthSheet(isAuth);
     $('authMsg').textContent = '';
     if (isAuth) {
+      /* always open on the form — the prompt is a post-auth state, not a starting one */
+      $('authForm').hidden = false;
+      $('authPrompt').hidden = true;
       /* logged something during the trial → lead with keeping it; skipped → plain signup */
       const saving = profile && profile.pending && Object.keys(data).length > 0;
       $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
@@ -1388,6 +1442,53 @@
     renderStep(1);
   });
   function hideOnboard() { $('onboard').hidden = true; setAuthSheet(false); }
+
+  /* ═══════════════ POST-SIGNUP PROMPT (same sheet, second beat) ═══════════════
+     In an in-app browser the useful ask is "get out of here so you can find us again".
+     Once they're in a real browser the useful ask is "put us on your home screen".
+     Asked at most once per browser — and a switched browser is a fresh one, so the
+     chain continues naturally rather than repeating itself. */
+  const ASKED_KEY = 'qt_prompt_asked';
+  const asked = () => { try { return !!localStorage.getItem(ASKED_KEY); } catch (e) { return false; } };
+  const markAsked = () => { try { localStorage.setItem(ASKED_KEY, '1'); } catch (e) {} };
+
+  const SHARE_GLYPH =
+    '<span class="share-glyph"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-label="Share">' +
+    '<path d="M12 3.2v11.3"/><path d="M8.4 6.8 12 3.2l3.6 3.6"/>' +
+    '<path d="M7.6 10.4H5.4a1 1 0 0 0-1 1v8.4a1 1 0 0 0 1 1h13.2a1 1 0 0 0 1-1v-8.4a1 1 0 0 0-1-1h-2.2"/>' +
+    '</svg></span>';
+
+  function nextPrompt() {
+    if (isStandalone() || asked()) return null;
+    return isEmbeddedBrowser() ? 'browser' : 'home';
+  }
+
+  /* called instead of finishing straight after auth */
+  function showPostAuthPrompt() {
+    const kind = nextPrompt();
+    if (!kind) { finishOnboarding(); return; }
+    markAsked();
+    trackStep(kind === 'browser' ? 'prompt_browser' : 'prompt_home');
+
+    if (kind === 'browser') {
+      $('promptTitle').textContent = 'Make it easy to find again';
+      $('promptNote').textContent = 'You’re viewing this inside another app, so it won’t be waiting for you next time. Opening it in your own browser fixes that.';
+      $('promptHow').innerHTML = 'Tap <b>•••</b> at the top, then <b>Open in browser</b>.';
+    } else {
+      $('promptTitle').textContent = 'Keep it one tap away';
+      $('promptNote').textContent = 'The habit only sticks if logging takes seconds. On your home screen it opens like any other app.';
+      $('promptHow').innerHTML = isIOS()
+        ? 'Tap ' + SHARE_GLYPH + ' below, then <b>Add to Home Screen</b>.'
+        : 'Open your browser menu, then <b>Add to Home screen</b>.';
+    }
+    $('authForm').hidden = true;
+    $('authPrompt').hidden = false;
+    setAuthSheet(true);
+  }
+
+  $('btnPromptDone').addEventListener('click', finishOnboarding);
+  $('btnPromptSkip').addEventListener('click', finishOnboarding);
   function msg(t, ok) { const m = $('authMsg'); m.textContent = t; m.className = 'auth-msg' + (ok ? ' ok' : ''); }
   function finishOnboarding() { hideOnboard(); startApp(); }
 
@@ -1466,6 +1567,18 @@
   /* two routes to the account screen — tracked separately so we can tell whether the
      people who bail there had logged a day first or skipped straight past it */
   $('btnTrialSkip').addEventListener('click', () => { trackStep('step_account_skip'); showOnboard(2); });
+  /* landing-page nudge: in-app browsers only, never blocks, stays dismissed */
+  const BANNER_KEY = 'qt_find_banner';
+  try {
+    if (isEmbeddedBrowser() && !isStandalone() && !localStorage.getItem(BANNER_KEY)) {
+      $('findBanner').hidden = false;
+    }
+  } catch (e) {}
+  $('btnBannerClose').addEventListener('click', () => {
+    $('findBanner').hidden = true;
+    try { localStorage.setItem(BANNER_KEY, '1'); } catch (e) {}
+  });
+
   $('btnStart').addEventListener('click', () => { trackStep('step_sub'); showOnboard('sub'); });
   $('btnGotAccount').addEventListener('click', () => showOnboard(2));
 
@@ -1497,7 +1610,9 @@
     saveProfile();
     pushAll();
     track(isNew ? 'signup' : 'login');
-    finishOnboarding();
+    /* signing in counts too — someone who just switched browsers arrives here as a
+       returning user, and that's exactly when the home-screen ask makes sense */
+    showPostAuthPrompt();
   }
 
   async function doAuth(mode) {
