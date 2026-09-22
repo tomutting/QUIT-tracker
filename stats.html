@@ -173,7 +173,7 @@ async function load() {
     stat(counts.login || 0, 'logins') +
     /* all-time, unfiltered: a launch from the home screen carries no utm and no referrer,
        so these would vanish entirely under the Meta-only filter */
-    stat((counts.home_added || 0) + ' / ' + (counts.home_shown || 0), 'home screen: added / asked') +
+    stat(counts.home_added || 0, 'added to home screen') +
     stat((counts['onboard_weed'] || 0) + ' / ' + (counts['onboard_cigs'] || 0) + ' / ' + (counts['onboard_alcohol'] || 0), 'weed / cigs / alc');
   /* ---- onboarding drop-off ----
      counts only traffic from the moment step tracking went live, otherwise every older
