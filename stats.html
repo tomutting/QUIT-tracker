@@ -64,6 +64,7 @@
     <h2>Onboarding drop-off</h2>
     <table id="dropTable"><thead><tr><th>Step</th><th class="num">Reached</th><th class="num">Kept</th><th class="num">Lost</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">"Kept" is the share of the previous step that got this far. The worst step is highlighted — that's where to look first.</p>
+    <p id="logMetric" style="margin-top:12px;font-size:13.5px;color:var(--accent)"></p>
     <p class="muted" id="dropWindow" style="margin-top:4px"></p>
     <p class="muted" id="accountSplit" style="margin-top:4px"></p>
   </div>
@@ -102,7 +103,7 @@ const $ = id => document.getElementById(id);
    deployed the step tracking, e.g. '2026-09-21T15:00:00Z'. Leave blank and it falls
    back to the first step event ever seen — close, but it quietly drops the people who
    landed and bounced before anyone got deep enough to fire one. */
-const DROPOFF_SINCE = '';
+const DROPOFF_SINCE = '2026-09-22T01:42:00Z';
 
 /* Drop-off counts Meta ad traffic only — direct visits, your own testing and organic
    referrals are excluded so the funnel reflects what the ads actually deliver.
@@ -170,11 +171,13 @@ async function load() {
   });
   const recentOnboards = Object.keys(recent).filter(k => k.indexOf('onboard') === 0).reduce((a, k) => a + recent[k], 0);
   const reachedAccount = (recent.step_account_log || 0) + (recent.step_account_skip || 0);
+  /* strictly sequential — logging isn't a gate (you can skip straight to the account
+     screen), so it can't sit in the chain without producing >100% steps. It's shown
+     separately below as a share of everyone who got into the app. */
   const FUNNEL = [
     ['Landed on the site',      recent.visit || 0],
     ['Picked a substance',      recentOnboards],
     ['Set max, into the app',   recent.step_app || 0],
-    ['Logged a day',            recent.first_log || 0],
     ['Reached account screen',  reachedAccount],
     ['Created an account',      recent.signup || 0]
   ];
@@ -193,6 +196,12 @@ async function load() {
     return '<tr><td' + hi + '>' + row[0] + '</td><td class="num">' + row[1] +
            '</td><td class="num"' + hi + '>' + kept + '</td><td class="num">' + lost + '</td></tr>';
   }).join('');
+
+  /* the metric the ads now optimise for, measured against everyone who reached the app */
+  const inApp = recent.step_app || 0, logged = recent.first_log || 0;
+  $('logMetric').textContent = inApp
+    ? 'Logged a day: ' + logged + ' — ' + Math.round(100 * logged / inApp) + '% of the ' + inApp + ' who got into the app.'
+    : 'Logged a day: ' + logged + '.';
 
   const srcList = Object.keys(metaSources).sort().join(', ');
   $('dropWindow').textContent = stepStart
