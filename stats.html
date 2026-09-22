@@ -176,6 +176,7 @@ async function load() {
      separately below as a share of everyone who got into the app. */
   const FUNNEL = [
     ['Landed on the site',      recent.visit || 0],
+    ['Tapped "Log your first day"', recent.step_sub || 0],
     ['Picked a substance',      recentOnboards],
     ['Set max, into the app',   recent.step_app || 0],
     ['Reached account screen',  reachedAccount],

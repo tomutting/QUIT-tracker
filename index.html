@@ -477,14 +477,17 @@
       <div class="dow" id="demoDow"></div>
       <div class="mgrid" id="demoGrid"></div>
     </div>
-    <p class="tagline" style="margin: 0 0 20px">Heavy days red, clear days green.</p>
+    <p class="tagline" style="margin: 0 0 22px">Heavy days red, clear days green.</p>
+    <button class="btn btn-save" id="btnStart">Log your first day</button>
+    <button class="btn-link" id="btnGotAccount">Got an account? Sign in</button>
+  </div>
+  <div class="ob-step" id="obStepSub" hidden>
     <h2>What are you quitting?</h2>
     <div class="sub-cards">
       <button class="sub-card" data-sub="alcohol"><span class="emoji">🍺</span><span><span class="t">Alcohol</span><br><span class="d">Log standard drinks per day</span></span></button>
       <button class="sub-card" data-sub="cigs"><span class="emoji">🚬</span><span><span class="t">Cigarettes</span><br><span class="d">Log cigarettes per day</span></span></button>
       <button class="sub-card" data-sub="weed"><span class="emoji">🌿</span><span><span class="t">Weed</span><br><span class="d">Log each smoke and how high you got</span></span></button>
     </div>
-    <button class="btn-link" id="btnGotAccount">Got an account? Sign in</button>
   </div>
   <div class="ob-step" id="obStepMax" hidden>
     <h2 id="maxQ"></h2>
@@ -1341,6 +1344,7 @@
     $('onboard').hidden = false;
     $('obStep1').hidden = step !== 1;
     if (step === 1) buildDemoMonth();
+    $('obStepSub').hidden = step !== 'sub';
     $('obStepMax').hidden = step !== 'max';
     $('obStep2').hidden = step !== 2;
     $('obStep3').hidden = step !== 'home';
@@ -1487,6 +1491,7 @@
   /* two routes to the account screen — tracked separately so we can tell whether the
      people who bail there had logged a day first or skipped straight past it */
   $('btnTrialSkip').addEventListener('click', () => { trackStep('step_account_skip'); showOnboard(2); });
+  $('btnStart').addEventListener('click', () => { trackStep('step_sub'); showOnboard('sub'); });
   $('btnGotAccount').addEventListener('click', () => showOnboard(2));
 
   /* first log made on a trial profile → let the celebration land, then ask them to save it */
