@@ -210,8 +210,8 @@ async function load() {
       new Date(stepStart).toLocaleString() + '. Direct, organic and test traffic excluded.'
     : 'No step-tracked traffic yet — this fills in once the new tracking is deployed and someone visits.';
   $('accountSplit').textContent = reachedAccount
-    ? 'Of those who reached it: ' + (counts.step_account_log || 0) + ' logged a day first, ' +
-      (counts.step_account_skip || 0) + ' skipped straight to it.'
+    ? 'Of those who reached it: ' + (recent.step_account_log || 0) + ' logged a day first, ' +
+      (recent.step_account_skip || 0) + ' skipped straight to it.'
     : '';
 
   /* ---- by time of day (visitor's local hour, recorded on each event) ----
