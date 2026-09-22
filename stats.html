@@ -68,6 +68,11 @@
     <p class="muted" id="accountSplit" style="margin-top:4px"></p>
   </div>
   <div class="card">
+    <h2>By time of day <span style="text-transform:none;letter-spacing:0;opacity:0.7">(visitor's local clock)</span></h2>
+    <table id="hourTable"><thead><tr><th>When they arrived</th><th class="num">Visits</th><th class="num">Into app</th><th class="num">First logs</th><th class="num">Logged</th></tr></thead><tbody></tbody></table>
+    <p class="muted" style="margin-top:8px">"Logged" is the share of those who reached the calendar who actually logged a day. If evenings are far higher, the day being unfinished is what's stopping people — and dayparting the ads would fix it.</p>
+  </div>
+  <div class="card">
     <h2>By source</h2>
     <table id="srcTable"><thead><tr><th>Source</th><th class="num">Visits</th><th class="num">Onboards</th><th class="num">🌿</th><th class="num">🚬</th><th class="num">🍺</th><th class="num">Signups</th></tr></thead><tbody></tbody></table>
     <p class="muted" style="margin-top:8px">Sources come from ?utm_source=… on your ad links, or the referrer. The three substance columns show which one that source's visitors picked.</p>
@@ -168,9 +173,8 @@ async function load() {
   const FUNNEL = [
     ['Landed on the site',      recent.visit || 0],
     ['Picked a substance',      recentOnboards],
-    ['Past "why quit"',         recent.step_how || 0],
-    ['Past "how it works"',     recent.step_max || 0],
     ['Set max, into the app',   recent.step_app || 0],
+    ['Logged a day',            recent.first_log || 0],
     ['Reached account screen',  reachedAccount],
     ['Created an account',      recent.signup || 0]
   ];
@@ -199,6 +203,36 @@ async function load() {
     ? 'Of those who reached it: ' + (counts.step_account_log || 0) + ' logged a day first, ' +
       (counts.step_account_skip || 0) + ' skipped straight to it.'
     : '';
+
+  /* ---- by time of day (visitor's local hour, recorded on each event) ----
+     tests whether people won't log because their day isn't over yet */
+  const BUCKETS = [
+    ['Morning (5am–12pm)',   h => h >= 5  && h < 12],
+    ['Afternoon (12–5pm)',   h => h >= 12 && h < 17],
+    ['Evening (5–10pm)',     h => h >= 17 && h < 22],
+    ['Late night (10pm–5am)', h => h >= 22 || h < 5]
+  ];
+  const byHour = BUCKETS.map(() => ({ visit: 0, app: 0, log: 0 }));
+  let anyHourData = false;
+  ev.forEach(d => {
+    const e = d.data();
+    const h = typeof e.h === 'number' ? e.h : (e.h != null ? parseInt(e.h, 10) : null);
+    if (h == null || isNaN(h)) return;
+    anyHourData = true;
+    const i = BUCKETS.findIndex(b => b[1](h));
+    if (i < 0) return;
+    if (e.t === 'visit') byHour[i].visit++;
+    else if (e.t === 'step_app') byHour[i].app++;
+    else if (e.t === 'first_log') byHour[i].log++;
+  });
+  $('hourTable').querySelector('tbody').innerHTML = anyHourData
+    ? BUCKETS.map((b, i) => {
+        const r = byHour[i];
+        const rate = r.app ? Math.round(100 * r.log / r.app) + '%' : '—';
+        return '<tr><td>' + b[0] + '</td><td class="num">' + r.visit + '</td><td class="num">' + r.app +
+               '</td><td class="num">' + r.log + '</td><td class="num">' + rate + '</td></tr>';
+      }).join('')
+    : '<tr><td colspan="5" class="muted">No data yet — local hour is only recorded on events from the new build onwards.</td></tr>';
 
   const tb = $('srcTable').querySelector('tbody');
   tb.innerHTML = Object.keys(bySrc).sort((a, b) => bySrc[b].visit - bySrc[a].visit).map(s =>
