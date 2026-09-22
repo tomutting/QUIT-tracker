@@ -181,18 +181,6 @@
   .btn:disabled { opacity: 0.5; }
   .auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .btn-link { background: none; border: none; color: var(--muted); font-size: 13px; padding: 12px 0 0; text-decoration: underline; cursor: pointer; width: 100%; }
-  .home-emoji { font-size: 46px; margin-bottom: 8px; filter: drop-shadow(0 4px 16px rgba(63,185,80,0.35)); }
-  .home-why { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 4px 0 16px; }
-  .home-why b { color: var(--text); font-weight: 600; }
-  .home-how {
-    background: rgba(255,255,255,0.045); border: 1px solid var(--border); border-radius: 12px;
-    padding: 12px 14px; margin-bottom: 16px; font-size: 13.5px; color: #c4ccd4; line-height: 1.9;
-  }
-  .home-how b { color: var(--text); font-weight: 700; }
-  .share-glyph {
-    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-    border-radius: 6px; background: rgba(88,166,255,0.16); color: #58a6ff; vertical-align: -7px; margin: 0 2px;
-  }
 
   /* ================= MAIN APP ================= */
   .topbar { position: relative; height: 0; z-index: 5; }
@@ -339,6 +327,14 @@
     max-height: 85vh; overflow-y: auto;
   }
   .sheet.open { transform: translateY(0); }
+  /* the auth sheet has to clear the onboarding layer (z 50), since it can be opened
+     from the landing page as well as from inside the app */
+  .overlay.hi { z-index: 52; }
+  .sheet.hi { z-index: 53; }
+  /* no grab handle here — this sheet can't be dragged away, so don't imply it can */
+  .sheet.auth { min-height: 48vh; padding-top: 26px; }
+  .sheet.auth::before { content: none; }
+  .auth-note { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 2px 0 16px; }
   .sheet::before {
     content: ''; display: block; width: 38px; height: 4px; border-radius: 2px;
     background: rgba(255,255,255,0.18); margin: 0 auto 14px;
@@ -499,26 +495,6 @@
     </div>
     <button class="btn btn-save" id="btnMaxContinue" style="margin-top: 24px">Continue</button>
   </div>
-  <div class="ob-step auth-box" id="obStep2" hidden>
-    <h2 id="authTitle">Create your account</h2>
-    <p class="sub-note" id="authNote">Create an account to save your days and keep your streak counting.</p>
-    <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-    <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
-    <div class="auth-msg" id="authMsg"></div>
-    <div class="auth-actions">
-      <button class="btn btn-save" id="btnSignup">Create account</button>
-      <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
-    </div>
-    <p class="privacy-note">Private by default. No marketing emails, ever — your log is never sold or shared, and only you can read it. <a href="privacy.html" target="_blank">Privacy policy</a></p>
-  </div>
-  <div class="ob-step" id="obStep3" hidden>
-    <div class="home-emoji">📲</div>
-    <h2>Add Clear Days to your home screen</h2>
-    <p class="home-why">The habit only sticks if logging takes seconds — <b>one tap away</b> beats buried in a browser.</p>
-    <div class="home-how" id="homeInstructions"></div>
-    <button class="btn btn-save" id="btnAddHome">Add to Home Screen</button>
-    <button class="btn-link" id="btnSkipHome">Skip for now</button>
-  </div>
 </div>
 
 <!-- ============ MAIN APP ============ -->
@@ -583,6 +559,21 @@
     <button id="btnConsentNo">Decline</button>
     <button class="yes" id="btnConsentYes">Accept</button>
   </div>
+</div>
+
+<!-- account creation: a sheet over whatever they were doing, so the app stays visible behind -->
+<div class="overlay hi" id="authOverlay"></div>
+<div class="sheet hi auth" id="authSheet">
+  <h3 id="authTitle">Save your progress</h3>
+  <div class="auth-note" id="authNote">Create an account to save your days and keep your streak counting.</div>
+  <input class="field" type="email" id="authEmail" placeholder="Email" autocomplete="email">
+  <input class="field" type="password" id="authPass" placeholder="Password (6+ characters)" autocomplete="new-password">
+  <div class="auth-msg" id="authMsg"></div>
+  <div class="auth-actions">
+    <button class="btn btn-save" id="btnSignup">Create account</button>
+    <button class="btn btn-ghost" id="btnSignin">I have an account — sign in</button>
+  </div>
+  <p class="privacy-note">Private by default. No marketing emails, ever — your log is never sold or shared, and only you can read it. <a href="privacy.html" target="_blank">Privacy policy</a></p>
 </div>
 
 <div class="overlay" id="overlay"></div>
@@ -655,11 +646,9 @@
   const $ = id => document.getElementById(id);
   const configured = () => FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE') === -1;
 
-  /* ---- add-to-home-screen support ---- */
-  let deferredInstallPrompt = null;
-  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstallPrompt = e; });
+  /* we no longer prompt for this ourselves, so beforeinstallprompt is left alone — Chrome
+     can offer its own install banner when it judges the moment right */
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
   /* ═══════════════ META PIXEL (consent-gated) ═══════════════
      Paste the dataset ID from Events Manager below. While it's blank nothing loads
@@ -1224,7 +1213,13 @@
     'auth/user-not-found': 'No account with that email — create one?',
     'auth/wrong-password': 'Wrong password.',
     'auth/invalid-credential': 'Wrong email or password.',
-    'auth/network-request-failed': 'Network error — are you online?'
+    'auth/network-request-failed': 'Network error — are you online?',
+    'auth/popup-blocked': 'Your browser blocked the Google window — use the email option below.',
+    'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
+    'auth/cancelled-popup-request': 'Google sign-in was cancelled.',
+    'auth/account-exists-with-different-credential': 'That email already has an account — sign in with your password below.',
+    'auth/operation-not-allowed': 'Google sign-in isn’t switched on for this project yet.',
+    'auth/unauthorized-domain': 'This domain isn’t authorised for sign-in in Firebase.'
   };
   const authErrMsg = e => {
     if (e && e.message && e.message.indexOf('Failed to load') === 0) {
@@ -1353,16 +1348,18 @@
 
   /* renderStep paints a step; showOnboard also records it in browser history so
      back/forward walk the onboarding steps instead of leaving the site */
+  function setAuthSheet(open) {
+    $('authOverlay').classList.toggle('open', open);
+    $('authSheet').classList.toggle('open', open);
+  }
+
   function renderStep(step) {
-    $('onboard').hidden = false;
-    $('obStep1').hidden = step !== 1;
-    if (step === 1) buildDemoMonth();
-    $('obStepSub').hidden = step !== 'sub';
-    $('obStepMax').hidden = step !== 'max';
-    $('obStep2').hidden = step !== 2;
-    $('obStep3').hidden = step !== 'home';
+    /* step 2 is a sheet, not a screen — it slides over whatever is already there, so we
+       deliberately leave the layer behind it (the app, or the landing page) untouched */
+    const isAuth = step === 2;
+    setAuthSheet(isAuth);
     $('authMsg').textContent = '';
-    if (step === 2) {
+    if (isAuth) {
       /* logged something during the trial → lead with keeping it; skipped → plain signup */
       const saving = profile && profile.pending && Object.keys(data).length > 0;
       $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
@@ -1370,8 +1367,13 @@
         ? 'Create an account so your days are saved and your streak keeps counting.'
         : 'Create an account to save your days and keep your streak counting.';
       if (!configured()) msg('Server not set up yet — see the setup note inside this file.');
+      return;
     }
-    if (step === 'home') setupHomeStep();
+    $('onboard').hidden = false;
+    $('obStep1').hidden = step !== 1;
+    if (step === 1) buildDemoMonth();
+    $('obStepSub').hidden = step !== 'sub';
+    $('obStepMax').hidden = step !== 'max';
   }
   function showOnboard(step) {
     renderStep(step);
@@ -1385,50 +1387,9 @@
     if (s && s !== 'cal') { renderStep(s); return; }
     renderStep(1);
   });
-  function hideOnboard() { $('onboard').hidden = true; }
+  function hideOnboard() { $('onboard').hidden = true; setAuthSheet(false); }
   function msg(t, ok) { const m = $('authMsg'); m.textContent = t; m.className = 'auth-msg' + (ok ? ' ok' : ''); }
   function finishOnboarding() { hideOnboard(); startApp(); }
-
-  /* after account creation/sign-in: offer to add to home screen, unless already installed */
-  function afterAuth() {
-    if (isStandalone()) { finishOnboarding(); return; }
-    showOnboard('home');
-  }
-  /* iOS share glyph, drawn inline so it matches the button they're looking for */
-  const SHARE_GLYPH =
-    '<span class="share-glyph"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
-    'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-label="Share">' +
-    '<path d="M12 3.2v11.3"/><path d="M8.4 6.8 12 3.2l3.6 3.6"/>' +
-    '<path d="M7.6 10.4H5.4a1 1 0 0 0-1 1v8.4a1 1 0 0 0 1 1h13.2a1 1 0 0 0 1-1v-8.4a1 1 0 0 0-1-1h-2.2"/>' +
-    '</svg></span>';
-
-  function setupHomeStep() {
-    trackStep('home_shown');
-    const how = $('homeInstructions');
-    const btn = $('btnAddHome');
-    if (deferredInstallPrompt) {
-      /* Chrome/Edge/Android: the browser lets us do it properly, one tap */
-      how.hidden = true;
-      btn.textContent = 'Add to Home Screen';
-      btn.onclick = async () => {
-        try { deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; } catch (e) {}
-        deferredInstallPrompt = null;
-        finishOnboarding();
-      };
-    } else if (isIOS()) {
-      /* iOS gives no way to trigger this from a page — Safari's own Share menu is the only route */
-      how.hidden = false;
-      how.innerHTML = 'Tap ' + SHARE_GLYPH + ' in the Safari bar below, then <b>Add to Home Screen</b>.';
-      btn.textContent = 'Got it';
-      btn.onclick = finishOnboarding;
-    } else {
-      how.hidden = false;
-      how.innerHTML = 'Open your browser menu, then <b>Add to Home screen</b> or <b>Install app</b>.';
-      btn.textContent = 'Got it';
-      btn.onclick = finishOnboarding;
-    }
-  }
-  $('btnSkipHome').addEventListener('click', finishOnboarding);
 
   let pendingMax = 6;
 
@@ -1518,6 +1479,27 @@
     }, 2200);
   }
 
+  /* shared by the email and Google paths: carry the trial profile's choices over, merge
+     anything logged during the trial, and route first-timers past the home-screen step */
+  async function completeAuth(cred, isNewHint) {
+    user = cred.user;
+    const isNew = cred.additionalUserInfo
+      ? cred.additionalUserInfo.isNewUser
+      : !!isNewHint;
+    /* sub can be null when a returning user signs in straight from the landing page —
+       pullMerge adopts their saved substance from the server below */
+    const sub = (profile && profile.substance) || pendingSub;
+    const mc = Object.assign({}, (profile && profile.maxCounts) || {});
+    if (sub && !mc[sub]) mc[sub] = pendingMax;
+    profile = { substance: sub, email: user.email || '', uid: user.uid, maxCounts: mc,
+                createdAt: isNew ? new Date().toISOString() : null };
+    await pullMerge(!isNew);   /* returning user: adopt their saved substance */
+    saveProfile();
+    pushAll();
+    track(isNew ? 'signup' : 'login');
+    finishOnboarding();
+  }
+
   async function doAuth(mode) {
     if (!configured()) { msg('Server not set up yet — see the setup note inside this file.'); return; }
     const email = $('authEmail').value.trim();
@@ -1532,23 +1514,7 @@
       const cred = mode === 'signup'
         ? await auth.createUserWithEmailAndPassword(email, pass)
         : await auth.signInWithEmailAndPassword(email, pass);
-      user = cred.user;
-      /* carry the trial profile's choices over; anything logged during the trial is
-         already in localStorage and goes up with the pushAll below */
-      /* sub can be null when a returning user signs in straight from the landing page —
-         pullMerge adopts their saved substance from the server below */
-      const sub = (profile && profile.substance) || pendingSub;
-      const mc = Object.assign({}, (profile && profile.maxCounts) || {});
-      if (sub && !mc[sub]) mc[sub] = pendingMax;
-      profile = { substance: sub, email: email, uid: user.uid, maxCounts: mc,
-                  createdAt: mode === 'signup' ? new Date().toISOString() : null };
-      await pullMerge(mode === 'signin');   /* returning user: adopt their saved substance */
-      saveProfile();
-      pushAll();
-      track(mode === 'signup' ? 'signup' : 'login');
-      /* home-screen prompt is a first-time thing — returning sign-ins go straight in */
-      if (mode === 'signup') afterAuth();
-      else finishOnboarding();
+      await completeAuth(cred, mode === 'signup');
     } catch (e) {
       msg(authErrMsg(e));
     } finally {
