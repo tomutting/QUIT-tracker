@@ -778,10 +778,12 @@
   const _steps = {};
   function trackStep(t) { if (_steps[t]) return; _steps[t] = 1; track(t); }
 
-  /* one visit event per browser session */
+  /* one visit event per browser session — but not for someone arriving from an in-app
+     browser they already signed up in; they were counted there */
+  const switchedBrowser = /[?&]signin=/.test(location.search);
   try {
-    if (!sessionStorage.getItem('qt_v')) { sessionStorage.setItem('qt_v', '1'); track('visit'); }
-  } catch (e) { track('visit'); }
+    if (!switchedBrowser && !sessionStorage.getItem('qt_v')) { sessionStorage.setItem('qt_v', '1'); track('visit'); }
+  } catch (e) { if (!switchedBrowser) track('visit'); }
 
   /* home screen installs, once per device. Chrome fires appinstalled; iOS fires nothing,
      so we detect it the first time the app is launched from the icon instead — which is
@@ -1121,9 +1123,19 @@
   $('btnSaveDay').addEventListener('click', () => {
     data[editKey] = SUB.hasIntensity ? { highs: selHighs.slice(0, selCount) } : { count: selCount };
     persist(); closeSheet(); showInfo(editKey);
-    maybeCelebrate(editKey);
+    let firstLog = false;
+    try { firstLog = !localStorage.getItem('qt_first_log'); } catch (e) {}
+    let celebrated = maybeCelebrate(editKey);
+    /* the very first log always gets a moment of feedback, even on a day that
+       doesn't qualify for a celebration */
+    if (!celebrated && firstLog) {
+      celebrate('✅', 'Day logged', 'That\'s your first one on the board.');
+      celebrated = true;
+    }
     trackFirstLog();
-    maybePromptAccount();
+    /* let the toast land, clear the screen so they see their day on the calendar,
+       then ask for the account a beat later */
+    maybePromptAccount(celebrated ? TOAST_GONE + 2500 : 2200);
   });
 
   /* activation metric: did a new account ever actually log anything? fires once per device */
@@ -1136,6 +1148,10 @@
   }
 
   /* ═══════════════ CELEBRATION ═══════════════ */
+  /* how long from calling celebrate() until the toast is off the screen */
+  const TOAST_HOLD = 2400, TOAST_GONE = TOAST_HOLD + 450;
+
+  /* returns true if a toast was shown, so the caller can wait for it to clear */
   function maybeCelebrate(k) {
     const score = entryScore(data[k]);
     /* clear days always celebrate */
@@ -1144,17 +1160,17 @@
       while (isSoberKey(key(d))) { streak++; d = addDays(d, -1); }
       if (streak > 0 && streak % 10 === 0) {
         celebrate('🏆', streak + ' days clear!', 'A huge milestone — keep going.');
-        return;
+        return true;
       }
       /* today isn't over, so praise the run so far rather than a finished day */
       if (k === todayKey) {
         celebrate('🎉', 'Clear so far today',
           streak > 1 ? streak + ' days in a row if it holds.' : 'Keep it going.');
-        return;
+        return true;
       }
       celebrate('🎉', 'A clear day!',
         streak > 1 ? streak + ' clear days in a row. Keep it going.' : 'Every one of these counts.');
-      return;
+      return true;
     }
     /* smoked, but less than their recent average → still progress */
     const d0 = new Date(k + 'T00:00:00');
@@ -1163,10 +1179,12 @@
       const e = data[key(addDays(d0, -i))];
       if (e) { sum += entryScore(e); logged++; }
     }
-    if (!logged) return;
+    if (!logged) return false;
     if (score < sum / logged) {
       celebrate('📉', 'Better than your average!', 'Lower than your last 7 days. Progress is progress.');
+      return true;
     }
+    return false;
   }
 
   function celebrate(emoji, title, sub) {
@@ -1191,7 +1209,7 @@
     toast.innerHTML = '<div class="big">' + emoji + '</div><div class="msg">' + title + '</div><div class="sub">' + sub + '</div>';
     document.body.appendChild(toast);
     requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
-    setTimeout(() => toast.classList.remove('show'), 2400);
+    setTimeout(() => toast.classList.remove('show'), TOAST_HOLD);
     setTimeout(() => { toast.remove(); box.remove(); }, 4000);
   }
   $('btnClearDay').addEventListener('click', () => {
@@ -1404,22 +1422,43 @@
     $('authSheet').classList.toggle('open', open);
   }
 
+  /* swap which auth button is the big one (and sits on top) */
+  function setAuthLead(signin) {
+    const up = $('btnSignup'), inn = $('btnSignin');
+    up.className = 'btn ' + (signin ? 'btn-ghost' : 'btn-save');
+    inn.className = 'btn ' + (signin ? 'btn-save' : 'btn-ghost');
+    up.textContent = signin ? 'New here? Create an account' : 'Create account';
+    inn.textContent = signin ? 'Sign in' : 'I have an account — sign in';
+    const first = signin ? inn : up, second = signin ? up : inn;
+    first.parentNode.insertBefore(first, second);
+    $('authPass').setAttribute('autocomplete', signin ? 'current-password' : 'new-password');
+    $('authPass').placeholder = signin ? 'Password' : 'Password (6+ characters)';
+  }
+
   function renderStep(step) {
     /* step 2 is a sheet, not a screen — it slides over whatever is already there, so we
        deliberately leave the layer behind it (the app, or the landing page) untouched */
-    const isAuth = step === 2;
+    /* 'signin' is the same sheet with sign-in leading — for people we know already have
+       an account (landing link, or arriving from an in-app browser after signing up) */
+    const isAuth = step === 2 || step === 'signin';
     setAuthSheet(isAuth);
     $('authMsg').textContent = '';
     if (isAuth) {
       /* always open on the form — the prompt is a post-auth state, not a starting one */
       $('authForm').hidden = false;
       $('authPrompt').hidden = true;
-      /* logged something during the trial → lead with keeping it; skipped → plain signup */
-      const saving = profile && profile.pending && Object.keys(data).length > 0;
-      $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
-      $('authNote').textContent = saving
-        ? 'Create an account so your days are saved and your streak keeps counting.'
-        : 'Create an account to save your days and keep your streak counting.';
+      setAuthLead(step === 'signin');
+      if (step === 'signin') {
+        $('authTitle').textContent = 'Welcome back';
+        $('authNote').textContent = 'Sign in to pick up where you left off — your days are saved.';
+      } else {
+        /* logged something during the trial → lead with keeping it; skipped → plain signup */
+        const saving = profile && profile.pending && Object.keys(data).length > 0;
+        $('authTitle').textContent = saving ? 'Save your progress' : 'Create your account';
+        $('authNote').textContent = saving
+          ? 'Create an account so your days are saved and your streak keeps counting.'
+          : 'Create an account to save your days and keep your streak counting.';
+      }
       if (!configured()) msg('Server not set up yet — see the setup note inside this file.');
       return;
     }
@@ -1473,8 +1512,17 @@
 
     if (kind === 'browser') {
       $('promptTitle').textContent = 'Make it easy to find again';
-      $('promptNote').textContent = 'You’re viewing this inside another app, so it won’t be waiting for you next time. Opening it in your own browser fixes that.';
+      $('promptNote').textContent = 'You’re viewing this inside another app, so it won’t be waiting for you next time. Opening it in your own browser fixes that — you’ll just sign in once more there, and your days come with you.';
       $('promptHow').innerHTML = 'Tap <b>•••</b> at the top, then <b>Open in browser</b>.';
+      /* "Open in browser" carries the current URL across, so leave a hint for the other
+         side to open straight on sign-in. Deliberately just a flag — nothing personal.
+         utm/fbclid stay so the other side is still credited to the ad; the visit counter
+         skips arrivals carrying this flag so the switch isn't counted as a second visit. */
+      try {
+        const q = new URLSearchParams(location.search);
+        q.set('signin', '1');
+        history.replaceState(history.state, '', location.pathname + '?' + q.toString());
+      } catch (e) {}
     } else {
       $('promptTitle').textContent = 'Keep it one tap away';
       $('promptNote').textContent = 'The habit only sticks if logging takes seconds. On your home screen it opens like any other app.';
@@ -1580,16 +1628,16 @@
   });
 
   $('btnStart').addEventListener('click', () => { trackStep('step_sub'); showOnboard('sub'); });
-  $('btnGotAccount').addEventListener('click', () => showOnboard(2));
+  $('btnGotAccount').addEventListener('click', () => showOnboard('signin'));
 
   /* first log made on a trial profile → let the celebration land, then ask them to save it */
-  function maybePromptAccount() {
+  function maybePromptAccount(delay) {
     if (!profile || !profile.pending) return;
     setTimeout(() => {
       if (!profile || !profile.pending) return;
       trackStep('step_account_log');
       showOnboard(2);
-    }, 2200);
+    }, delay == null ? 2200 : delay);
   }
 
   /* shared by the email and Google paths: carry the trial profile's choices over, merge
@@ -1692,10 +1740,26 @@
   });
 
   /* ---- boot ---- */
+  let arrivedToSignIn = false;
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('signin')) {
+      arrivedToSignIn = true;
+      q.delete('signin');
+      const rest = q.toString();
+      history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    }
+  } catch (e) {}
+
   if (profile && profile.substance && (profile.email || profile.pending)) startApp();
   else {
     renderStep(1);
     try { history.replaceState({ ob: 1 }, ''); } catch (e) {}
+    /* came over from an in-app browser after signing up: landing behind, sign-in on top */
+    if (arrivedToSignIn) {
+      track('arrive_signin');
+      showOnboard('signin');
+    }
   }
 })();
 </script>
