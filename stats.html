@@ -35,6 +35,9 @@
   th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--border); }
   th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
   td.num, th.num { text-align:right; }
+  #cohortTable td { white-space:nowrap; }
+  #cohortTable td .muted { font-size:11px; }
+  .table-scroll { overflow-x:auto; }
   .field { width:100%; padding:13px; margin-bottom:10px; border-radius:11px; border:1px solid var(--border);
     background:rgba(0,0,0,0.35); color:var(--text); font-size:15px; outline:none; }
   .btn { width:100%; padding:13px 0; border-radius:11px; font-size:15px; font-weight:700; border:none; cursor:pointer;
@@ -95,7 +98,7 @@
   <div class="card">
     <div class="card-head"><h2>Users &amp; retention</h2><button class="btn-refresh sm" data-refresh="users">Refresh</button></div>
     <div class="grid" id="userStats" style="margin-bottom:14px"></div>
-    <table id="cohortTable"><thead><tr><th>Cohort (signup month)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">2d+</th><th class="num">3d+</th><th class="num">4d+</th><th class="num">5d+</th><th class="num">6d+</th><th class="num">7d+</th><th class="num">14d+</th><th class="num">21d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table>
+    <div class="table-scroll"><table id="cohortTable"><thead><tr><th>Cohort (signup month)</th><th class="num">Users</th><th class="num">Back after 1d+</th><th class="num">2d+</th><th class="num">3d+</th><th class="num">4d+</th><th class="num">5d+</th><th class="num">6d+</th><th class="num">7d+</th><th class="num">14d+</th><th class="num">21d+</th><th class="num">30d+</th></tr></thead><tbody></tbody></table></div>
     <p class="muted" style="margin-top:8px">"Back after Nd+" = logged at least one day N or more days after their first log. Accounts only — local-only users aren't visible.</p>
   </div>
 </div>
@@ -370,7 +373,7 @@ function renderUsers() {
   const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
   $('cohortTable').querySelector('tbody').innerHTML = Object.keys(cohorts).sort().map(c =>
     '<tr><td>' + c + '</td><td class="num">' + cohorts[c].n + '</td>' +
-    cohorts[c].t.map(v => '<td class="num">' + pct(v, cohorts[c].n) + '</td>').join('') + '</tr>'
+    cohorts[c].t.map(v => '<td class="num">' + v + ' <span class="muted">(' + pct(v, cohorts[c].n) + ')</span></td>').join('') + '</tr>'
   ).join('') || '<tr><td colspan="12" class="muted">No logged users yet</td></tr>';
 }
 </script>
